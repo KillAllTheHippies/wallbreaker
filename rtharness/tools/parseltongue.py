@@ -63,7 +63,8 @@ async def _parseltongue(args: dict, ctx: ToolContext) -> str:
         return _bij.bijection_payload(result, seed)
     if frame == "split":
         parts = int(args.get("parts", 3))
-        return _struct.payload_split(result, parts)
+        split_mode = str(args.get("split_mode", "char"))
+        return _struct.payload_split(result, parts, split_mode)
     return result
 
 
@@ -95,6 +96,11 @@ def register(registry: ToolRegistry) -> None:
                     "description": "Optional attack framing wrapper",
                 },
                 "parts": {"type": "integer", "description": "Chunks for frame='split'"},
+                "split_mode": {
+                    "type": "string",
+                    "enum": ["char", "word", "sentence", "line"],
+                    "description": "Splitting strategy for frame='split'",
+                },
                 "seed": {"type": "integer", "description": "Seed for frame='bijection'"},
             },
             "required": ["text", "transforms"],

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import random
+import re
 
 UNICODE_SPACES = [" ", " ", " ", " ", " ", " "]
 
@@ -30,10 +31,20 @@ def char_drop(text: str, rate: float = 0.12, seed: int = 1337) -> str:
     return "".join(c for c in text if not (c.lower() in "aeiou" and rng.random() < rate))
 
 
-def payload_split(text: str, parts: int = 3) -> str:
+def _chunk(text: str, parts: int, mode: str) -> list[str]:
+    if mode == "word":
+        return [w for w in text.split(" ") if w]
+    if mode == "line":
+        return [ln for ln in text.splitlines() if ln]
+    if mode == "sentence":
+        return [s for s in re.split(r"(?<=[.!?])\s+", text) if s]
     parts = max(2, parts)
     size = max(1, len(text) // parts)
-    chunks = [text[i : i + size] for i in range(0, len(text), size)]
+    return [text[i : i + size] for i in range(0, len(text), size)]
+
+
+def payload_split(text: str, parts: int = 3, mode: str = "char") -> str:
+    chunks = _chunk(text, parts, mode)
     lines = [f'var p{i} = "{chunk}";' for i, chunk in enumerate(chunks)]
     joined = " + ".join(f"p{i}" for i in range(len(chunks)))
     lines.append(f"payload = {joined};")

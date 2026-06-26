@@ -71,6 +71,8 @@ TRANSFORMS: dict[str, Transform] = dict(
         _t("gibberish", linguistics.gibberish, None, "Deterministic word -> pronounceable gibberish"),
         _t("neutralize", linguistics.neutralize_encode, linguistics.neutralize_decode, "Swap flagged terms for neutral synonyms (lossy)", lossy=True),
         _t("bijection_greek", bijection.bijection_greek_encode, bijection.bijection_greek_decode, "Bijection substitution to Greek letters (case-folding)", lossy=True),
+        _t("bijection_symbol", bijection.bijection_symbol_encode, bijection.bijection_symbol_decode, "Bijection substitution to symbols (case-folding)", lossy=True),
+        _t("bijection_emoji", bijection.bijection_emoji_encode, bijection.bijection_emoji_decode, "Bijection substitution to emoji (case-folding)", lossy=True),
         _t("casing", structural.casing_chaos, None, "Random upper/lower casing"),
         _t("whitespace", structural.whitespace_chaos, None, "Unicode whitespace chaos"),
         _t("char_drop", structural.char_drop, None, "Drop a fraction of vowels"),
