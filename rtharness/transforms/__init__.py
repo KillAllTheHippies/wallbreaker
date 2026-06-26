@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Callable
 
-from . import bijection, encodings, stego, structural, unicode_obf
+from . import bijection, encodings, fonts, stego, structural, unicode_obf
 
 
 @dataclass
@@ -44,9 +44,16 @@ TRANSFORMS: dict[str, Transform] = dict(
         _t("zalgo", unicode_obf.zalgo_encode, unicode_obf.zalgo_strip, "Combining-mark noise"),
         _t("fullwidth", unicode_obf.fullwidth_encode, unicode_obf.fullwidth_decode, "Fullwidth character forms"),
         _t("tag_smuggle", unicode_obf.tag_smuggle_encode, unicode_obf.tag_smuggle_decode, "Invisible Unicode tag-block smuggling"),
+        _t("rtl_override", unicode_obf.rtl_override_encode, unicode_obf.rtl_override_decode, "Right-to-left override display reversal"),
+        _t("pepper", unicode_obf.pepper_encode, unicode_obf.zero_width_strip, "Sprinkle random zero-width noise between chars"),
         _t("emoji_stego", stego.emoji_stego_encode, stego.emoji_stego_decode, "Hide bytes in emoji variation selectors"),
+        _t("tokenade", stego.tokenade_encode, stego.tokenade_decode, "Dense emoji + zero-width nested token payload"),
         _t("zw_binary", stego.zero_width_binary_encode, stego.zero_width_binary_decode, "Invisible zero-width binary payload"),
         _t("bijection", bijection.bijection_encode, bijection.bijection_decode, "Two-letter bijection substitution (case-folding)", lossy=True),
+        _t("bold", fonts.bold_encode, fonts.bold_decode, "Mathematical sans-serif bold styling"),
+        _t("circled", fonts.circled_encode, fonts.circled_decode, "Enclosed/circled alphanumerics"),
+        _t("smallcaps", fonts.smallcaps_encode, fonts.smallcaps_decode, "Small-capitals styling (case-folding)", lossy=True),
+        _t("flip", fonts.flip_encode, fonts.flip_decode, "Upside-down mirrored text (approximate decode)", lossy=True),
         _t("casing", structural.casing_chaos, None, "Random upper/lower casing"),
         _t("whitespace", structural.whitespace_chaos, None, "Unicode whitespace chaos"),
         _t("char_drop", structural.char_drop, None, "Drop a fraction of vowels"),

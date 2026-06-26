@@ -41,6 +41,40 @@ def zero_width_binary_encode(text: str, carrier: str = "") -> str:
     return carrier + hidden
 
 
+def tokenade_encode(text: str, carrier: str = "🧬") -> str:
+    data = text.encode("utf-8")
+    out = [carrier]
+    for i, b in enumerate(data):
+        out.append(_byte_to_vs(b))
+        if (i + 1) % 4 == 0:
+            out.append("‍" + carrier)
+    return "".join(out)
+
+
+def tokenade_decode(text: str) -> str:
+    collected = [b for ch in text if (b := _vs_to_byte(ch)) is not None]
+    return bytes(collected).decode("utf-8", "replace")
+
+
+def tokenade_encode(text: str, carrier: str = "🧬") -> str:
+    data = text.encode("utf-8")
+    out = [carrier]
+    for i, b in enumerate(data):
+        out.append(_byte_to_vs(b))
+        if (i + 1) % 4 == 0:
+            out.append("‍" + carrier)
+    return "".join(out)
+
+
+def tokenade_decode(text: str) -> str:
+    collected = []
+    for ch in text:
+        b = _vs_to_byte(ch)
+        if b is not None:
+            collected.append(b)
+    return bytes(collected).decode("utf-8", "replace")
+
+
 def zero_width_binary_decode(text: str) -> str:
     bits = []
     for ch in text:

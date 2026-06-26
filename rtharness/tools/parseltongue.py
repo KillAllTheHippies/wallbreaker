@@ -13,8 +13,30 @@ from ..transforms import structural as _struct
 from .registry import ToolContext, ToolRegistry
 
 
-def _catalog() -> str:
-    return "; ".join(f"{t.name} ({t.description})" for t in list_transforms())
+def _catalog_names() -> str:
+    return ", ".join(t.name for t in list_transforms())
+
+
+def _catalog_full() -> str:
+    lines = [f"{len(list_transforms())} transforms (chain them left-to-right):"]
+    for t in list_transforms():
+        flags = []
+        if t.reversible:
+            flags.append("reversible")
+        else:
+            flags.append("one-way")
+        if t.lossy:
+            flags.append("lossy")
+        lines.append(f"  {t.name:14} [{', '.join(flags)}] {t.description}")
+    lines.append("")
+    lines.append("Frames: frame='bijection' wraps output with a decode-key preamble; "
+                 "frame='split' breaks it into concatenated variables.")
+    lines.append("Set decode=true to reverse a reversible chain.")
+    return "\n".join(lines)
+
+
+async def _catalog_tool(args: dict, ctx: ToolContext) -> str:
+    return _catalog_full()
 
 
 async def _parseltongue(args: dict, ctx: ToolContext) -> str:
@@ -50,10 +72,12 @@ def register(registry: ToolRegistry) -> None:
         name="parseltongue",
         description=(
             "Obfuscate or encode text by applying a chain of Parseltongue transforms "
-            "(left to right). Use for crafting payloads that bypass keyword filters. "
-            "Set decode=true to reverse a reversible chain. Optional frame='bijection' "
-            "wraps the result with a decode-key preamble; frame='split' splits it into "
-            "concatenated parts. Available transforms: " + _catalog()
+            "(left to right) to craft payloads that bypass keyword filters. Chain freely, "
+            "e.g. ['leet','homoglyph','zero_width'] or ['base64'] then tell the target how "
+            "to decode. Set decode=true to reverse a reversible chain. frame='bijection' "
+            "wraps with a decode-key preamble; frame='split' splits into concatenated "
+            "parts. Call parseltongue_catalog for the full option list with flags. "
+            "Transforms: " + _catalog_names()
         ),
         parameters={
             "type": "object",
@@ -76,6 +100,16 @@ def register(registry: ToolRegistry) -> None:
             "required": ["text", "transforms"],
         },
         handler=_parseltongue,
+    )
+    registry.add(
+        name="parseltongue_catalog",
+        description=(
+            "List every Parseltongue transform with its reversibility and lossy flags, "
+            "plus the available frames. Call this to see all obfuscation options before "
+            "building a chain."
+        ),
+        parameters={"type": "object", "properties": {}},
+        handler=_catalog_tool,
     )
 
 

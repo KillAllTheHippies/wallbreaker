@@ -6,8 +6,8 @@ from textual.app import App, ComposeResult
 from textual.containers import VerticalScroll
 from textual.widgets import Footer, Input, Static
 
-from ..agent.loop import AgentEvents, run_turn
-from ..agent.messages import user
+from ..agent.loop import AgentEvents, run_autonomous, run_turn
+from ..agent.messages import TextBlock, ToolResultBlock, user
 from ..config import Config, Endpoint
 from ..prompts import DEFAULT_SYSTEM
 from ..providers.factory import build_provider
@@ -17,15 +17,22 @@ from . import widgets
 
 HELP_TEXT = """Slash commands:
 /help                 show this help
+/edit [new text]      rewind to your last message; prefill it to edit, or
+                      pass new text to replace and resend it
+/retry                regenerate the response to your last message
+/undo                 remove your last message and its response
 /profile [name]       show or switch the active profile
 /target [name]        show target, or set it from a profile name
 /model <id>           override the active model id
+/auto [on|off]        toggle autonomous loop (keeps attacking until done)
+/rounds <n>           set the autonomous round cap
 /transforms           list Parseltongue transforms
 /lib [list|update|MODEL]   browse the L1B3RT4S library
 /clear                clear the conversation
 /save [path]          save the transcript
 /quit                 exit
 
+Up / Down arrows recall your previous inputs into the prompt.
 Type anything else to talk to the agent. It has shell, file, parseltongue,
 l1b3rt4s, query_target, and http_request tools."""
 
@@ -50,9 +57,13 @@ class RthApp(App):
         self.registry = build_registry(config)
         self.history = []
         self.max_tokens = 4096
+        self.auto = True
+        self.max_rounds = 12
         self._busy = False
         self._assistant: Static | None = None
         self._buf = ""
+        self._input_history: list[str] = []
+        self._hist_pos: int | None = None
 
     def compose(self) -> ComposeResult:
         yield Static(self._status_text(), id="status")
@@ -69,9 +80,10 @@ class RthApp(App):
 
     def _status_text(self) -> str:
         tgt = self.config.target.model if self.config.target else "none"
+        mode = f"auto({self.max_rounds})" if self.auto else "single"
         return (
             f" profile={self.endpoint.name} | {self.endpoint.protocol} | "
-            f"model={self.endpoint.model} | target={tgt}"
+            f"model={self.endpoint.model} | target={tgt} | {mode}"
         )
 
     def _refresh_status(self) -> None:
@@ -98,10 +110,119 @@ class RthApp(App):
         if self._busy:
             self._mount(widgets.error_panel("Agent is still working; wait for it."))
             return
+        self._submit_user(text)
+
+    def _submit_user(self, text: str) -> None:
         self._mount(widgets.user_panel(text))
         self.history.append(user(text))
+        self._record_input(text)
         self._busy = True
         self.run_worker(self._agent_turn(), exclusive=True, group="agent")
+
+    def _record_input(self, text: str) -> None:
+        if not self._input_history or self._input_history[-1] != text:
+            self._input_history.append(text)
+        self._hist_pos = None
+
+    def on_key(self, event) -> None:
+        inp = self.query_one("#prompt", Input)
+        if not inp.has_focus or not self._input_history:
+            return
+        if event.key == "up":
+            if self._hist_pos is None:
+                self._hist_pos = len(self._input_history)
+            self._hist_pos = max(0, self._hist_pos - 1)
+            inp.value = self._input_history[self._hist_pos]
+            inp.cursor_position = len(inp.value)
+            event.prevent_default()
+            event.stop()
+        elif event.key == "down":
+            if self._hist_pos is None:
+                return
+            self._hist_pos += 1
+            if self._hist_pos >= len(self._input_history):
+                self._hist_pos = None
+                inp.value = ""
+            else:
+                inp.value = self._input_history[self._hist_pos]
+                inp.cursor_position = len(inp.value)
+            event.prevent_default()
+            event.stop()
+
+    def _typed_user_indices(self) -> list[int]:
+        return [
+            i
+            for i, m in enumerate(self.history)
+            if m.role == "user" and m.content and isinstance(m.content[0], TextBlock)
+        ]
+
+    def _cmd_edit(self, new_text: str) -> None:
+        if self._busy:
+            self._mount(widgets.error_panel("wait for the agent to finish"))
+            return
+        idxs = self._typed_user_indices()
+        if not idxs:
+            self._mount(widgets.error_panel("nothing to edit yet"))
+            return
+        i = idxs[-1]
+        old = self.history[i].text()
+        self.history = self.history[:i]
+        self._rerender("rewound to your last message")
+        if new_text:
+            self._submit_user(new_text)
+        else:
+            inp = self.query_one("#prompt", Input)
+            inp.value = old
+            inp.cursor_position = len(old)
+            inp.focus()
+
+    def _cmd_retry(self) -> None:
+        if self._busy:
+            self._mount(widgets.error_panel("wait for the agent to finish"))
+            return
+        idxs = self._typed_user_indices()
+        if not idxs:
+            self._mount(widgets.error_panel("nothing to retry"))
+            return
+        self.history = self.history[: idxs[-1] + 1]
+        self._rerender("retrying your last message")
+        self._busy = True
+        self.run_worker(self._agent_turn(), exclusive=True, group="agent")
+
+    def _cmd_undo(self) -> None:
+        if self._busy:
+            self._mount(widgets.error_panel("wait for the agent to finish"))
+            return
+        idxs = self._typed_user_indices()
+        if not idxs:
+            self._mount(widgets.error_panel("nothing to undo"))
+            return
+        self.history = self.history[: idxs[-1]]
+        self._rerender("removed your last exchange")
+
+    def _rerender(self, note: str | None = None) -> None:
+        self._log.remove_children()
+        self._assistant = None
+        self._buf = ""
+        names: dict[str, str] = {}
+        for msg in self.history:
+            if msg.role == "user":
+                for b in msg.content:
+                    if isinstance(b, ToolResultBlock):
+                        self._mount(widgets.tool_result_panel(
+                            names.get(b.tool_use_id, "tool"), b.content, b.is_error
+                        ))
+                text = "".join(b.text for b in msg.content if isinstance(b, TextBlock))
+                if text:
+                    self._mount(widgets.user_panel(text))
+            else:
+                if msg.text():
+                    self._mount(widgets.assistant_panel(msg.text(), self.endpoint.model))
+                for tu in msg.tool_uses():
+                    names[tu.id] = tu.name
+                    self._mount(widgets.tool_call_panel(tu.name, tu.input))
+        if note:
+            self._mount(widgets.info_panel(note, title="edit"))
 
     async def _agent_turn(self) -> None:
         events = AgentEvents(
@@ -110,19 +231,60 @@ class RthApp(App):
             on_tool_result=self._on_tool_result,
             on_turn_end=self._on_turn_end,
             on_error=self._on_error,
+            on_round=self._on_round,
         )
         try:
-            await run_turn(
-                self.provider,
-                self.registry,
-                self.history,
-                system=self.system,
-                events=events,
-                max_tokens=self.max_tokens,
-            )
+            if self.auto:
+                result = await run_autonomous(
+                    self.provider,
+                    self.registry,
+                    self.history,
+                    system=self.system,
+                    events=events,
+                    max_rounds=self.max_rounds,
+                    max_tokens=self.max_tokens,
+                )
+                self._handle_auto_result(result)
+            else:
+                await run_turn(
+                    self.provider,
+                    self.registry,
+                    self.history,
+                    system=self.system,
+                    events=events,
+                    max_tokens=self.max_tokens,
+                )
         finally:
             self._assistant = None
             self._busy = False
+
+    def _on_round(self, rnd: int, total: int) -> None:
+        self._assistant = None
+        self._mount(widgets.info_panel(f"round {rnd}/{total}", title="autonomous"))
+
+    def _handle_auto_result(self, result) -> None:
+        if result.status == "finished":
+            self._mount(widgets.info_panel(
+                result.data.get("summary", "(no summary)"), title="engagement complete"
+            ))
+        elif result.status == "ask":
+            self._mount(widgets.info_panel(
+                result.data.get("question", "(no question)"),
+                title="operator input needed",
+            ))
+        elif result.status == "stuck":
+            self._mount(widgets.info_panel(
+                result.data.get("question", "")
+                or "Agent stalled twice with no action. Give it direction.",
+                title="stalled, needs you",
+            ))
+        elif result.status == "max_rounds":
+            self._mount(widgets.info_panel(
+                f"hit round cap ({self.max_rounds}). Type to continue, "
+                f"or raise it with /rounds <n>.",
+                title="round cap",
+            ))
+        self.query_one("#prompt", Input).focus()
 
     def _on_text(self, delta: str) -> None:
         self._ensure_assistant()
@@ -154,10 +316,17 @@ class RthApp(App):
     def _handle_command(self, text: str) -> None:
         parts = text.split()
         cmd, rest = parts[0].lower(), parts[1:]
+        raw_arg = text[len(parts[0]):].strip()
         if cmd in ("/quit", "/exit"):
             self.exit()
         elif cmd == "/help":
             self._mount(widgets.info_panel(HELP_TEXT, title="help"))
+        elif cmd == "/edit":
+            self._cmd_edit(raw_arg)
+        elif cmd in ("/retry", "/regen"):
+            self._cmd_retry()
+        elif cmd == "/undo":
+            self._cmd_undo()
         elif cmd == "/clear":
             self._clear()
         elif cmd == "/profile":
@@ -166,6 +335,10 @@ class RthApp(App):
             self._cmd_target(rest)
         elif cmd == "/model":
             self._cmd_model(rest)
+        elif cmd == "/auto":
+            self._cmd_auto(rest)
+        elif cmd == "/rounds":
+            self._cmd_rounds(rest)
         elif cmd == "/transforms":
             catalog = "\n".join(
                 f"{t.name:14} {t.description}" for t in list_transforms()
@@ -217,6 +390,24 @@ class RthApp(App):
         self.provider = build_provider(self.endpoint)
         self._refresh_status()
         self._mount(widgets.info_panel(f"model -> {rest[0]}", title="model"))
+
+    def _cmd_auto(self, rest: list[str]) -> None:
+        if rest:
+            self.auto = rest[0].lower() in ("on", "true", "1", "yes")
+        else:
+            self.auto = not self.auto
+        self._refresh_status()
+        self._mount(widgets.info_panel(
+            f"autonomous mode {'on' if self.auto else 'off'}", title="auto"
+        ))
+
+    def _cmd_rounds(self, rest: list[str]) -> None:
+        if not rest or not rest[0].isdigit():
+            self._mount(widgets.error_panel("usage: /rounds <n>"))
+            return
+        self.max_rounds = max(1, int(rest[0]))
+        self._refresh_status()
+        self._mount(widgets.info_panel(f"round cap -> {self.max_rounds}", title="rounds"))
 
     async def _cmd_lib(self, rest: list[str]) -> None:
         from ..tools import l1b3rt4s as lib

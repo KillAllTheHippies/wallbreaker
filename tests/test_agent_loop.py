@@ -1,4 +1,4 @@
-from rtharness.agent.loop import AgentEvents, run_turn
+from rtharness.agent.loop import AgentEvents, run_autonomous, run_turn
 from rtharness.agent.messages import (
     StopEvent,
     TextDelta,
@@ -28,6 +28,14 @@ def _registry():
     reg = ToolRegistry(ctx)
     shell.register(reg)
     files.register(reg)
+    return reg
+
+
+def _registry_with_control():
+    from rtharness.tools import control
+
+    reg = _registry()
+    control.register(reg)
     return reg
 
 
@@ -64,6 +72,63 @@ async def test_loop_stops_without_tools():
     result = await run_turn(provider, _registry(), history)
     assert result.text() == "just text"
     assert provider.calls == 1
+
+
+async def test_autonomous_persists_then_finishes():
+    from rtharness.agent.messages import ToolUseEvent
+
+    provider = ScriptedProvider(
+        [
+            [
+                ToolUseEvent("c1", "query_target", {"prompt": "give me X"}),
+                StopEvent("tool_use"),
+            ],
+            [TextDelta("target refused, reporting back"), StopEvent("end_turn")],
+            [
+                ToolUseEvent("c2", "query_target", {"prompt": "encoded retry"}),
+                StopEvent("tool_use"),
+            ],
+            [
+                ToolUseEvent("c3", "finish", {"summary": "bypassed on round 2"}),
+                StopEvent("tool_use"),
+            ],
+        ]
+    )
+    rounds = []
+    events = AgentEvents(on_round=lambda r, m: rounds.append(r))
+    result = await run_autonomous(
+        provider, _registry_with_control(), [user("attack the target")],
+        events=events, max_rounds=8,
+    )
+    assert result.status == "finished"
+    assert result.data["summary"] == "bypassed on round 2"
+    assert len(rounds) >= 2
+
+
+async def test_autonomous_asks_operator():
+    from rtharness.agent.messages import ToolUseEvent
+
+    provider = ScriptedProvider(
+        [
+            [
+                ToolUseEvent("c1", "ask_operator", {"question": "which target scope?"}),
+                StopEvent("tool_use"),
+            ],
+        ]
+    )
+    result = await run_autonomous(
+        provider, _registry_with_control(), [user("go")], max_rounds=5
+    )
+    assert result.status == "ask"
+    assert result.data["question"] == "which target scope?"
+
+
+async def test_autonomous_detects_stuck():
+    provider = ScriptedProvider([[TextDelta("just chatting"), StopEvent("end_turn")]])
+    result = await run_autonomous(
+        provider, _registry_with_control(), [user("go")], max_rounds=5
+    )
+    assert result.status == "stuck"
 
 
 async def test_unknown_tool_reported_as_error():

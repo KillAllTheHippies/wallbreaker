@@ -8,10 +8,11 @@ def build_registry(config: Config, cwd: str | None = None) -> ToolRegistry:
     ctx = ToolContext(config=config, cwd=cwd or ".")
     registry = ToolRegistry(ctx)
 
-    from . import files, shell
+    from . import control, files, shell
 
     shell.register(registry)
     files.register(registry)
+    control.register(registry)
 
     for module_name in ("parseltongue", "l1b3rt4s", "target", "http_tool"):
         try:

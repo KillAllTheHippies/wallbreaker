@@ -7,6 +7,12 @@ ZWSP = "​"
 ZWNJ = "‌"
 ZWJ = "‍"
 ZERO_WIDTH_CHARS = (ZWSP, ZWNJ, ZWJ, "﻿", "⁠")
+RLO = "‮"
+PDF = "‬"
+PEPPER_CHARS = (ZWSP, ZWNJ, "⁠")
+RLO = "‮"
+PDF = "‬"
+PEPPER_CHARS = (ZWSP, ZWNJ, "⁠")
 
 HOMOGLYPHS = {
     "a": "а", "c": "с", "e": "е", "o": "о", "p": "р",
@@ -101,3 +107,44 @@ def tag_smuggle_decode(text: str) -> str:
         else:
             out.append(ch)
     return "".join(out)
+
+
+def rtl_override_encode(text: str) -> str:
+    return RLO + text + PDF
+
+
+def rtl_override_decode(text: str) -> str:
+    return text.replace(RLO, "").replace(PDF, "")
+
+
+def pepper_encode(text: str, rate: float = 0.35) -> str:
+    rng = random.Random(0xBEEF)
+    out = []
+    for ch in text:
+        out.append(ch)
+        if rng.random() < rate:
+            out.append(rng.choice(PEPPER_CHARS))
+    return "".join(out)
+
+
+def pepper_decode(text: str) -> str:
+    return zero_width_strip(text)
+
+
+def rtl_override_encode(text: str) -> str:
+    return RLO + text + PDF
+
+
+def rtl_override_decode(text: str) -> str:
+    return text.replace(RLO, "").replace(PDF, "")
+
+
+def pepper_encode(text: str, rate: float = 0.35) -> str:
+    rng = random.Random(0xBADC0DE)
+    out = []
+    for ch in text:
+        out.append(ch)
+        if rng.random() < rate:
+            out.append(rng.choice(PEPPER_CHARS))
+    return "".join(out)
+

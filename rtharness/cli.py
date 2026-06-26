@@ -53,6 +53,12 @@ def build_main_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--system", help="System prompt override for this session"
     )
+    parser.add_argument(
+        "--auto", action="store_true", help="Run autonomously until finish/ask_operator"
+    )
+    parser.add_argument(
+        "--rounds", type=int, default=12, help="Autonomous round cap (default 12)"
+    )
     return parser
 
 
@@ -72,7 +78,7 @@ def build_sub_parser() -> argparse.ArgumentParser:
 
 
 async def _one_shot(config: Config, args: argparse.Namespace) -> int:
-    from .agent.loop import AgentEvents, run_turn
+    from .agent.loop import AgentEvents, run_autonomous, run_turn
     from .agent.messages import user
     from .prompts import DEFAULT_SYSTEM
     from .providers.factory import build_provider
@@ -94,12 +100,22 @@ async def _one_shot(config: Config, args: argparse.Namespace) -> int:
             f"[{n} -> {'error' if e else 'ok'}]", file=sys.stderr
         ),
         on_error=lambda m: print(f"\n[error] {m}", file=sys.stderr),
+        on_round=lambda r, m: print(f"\n=== round {r}/{m} ===", file=sys.stderr),
     )
 
+    history = [user(args.prompt)]
     try:
-        await run_turn(
-            provider, registry, [user(args.prompt)], system=system, events=events
-        )
+        if args.auto:
+            result = await run_autonomous(
+                provider, registry, history, system=system,
+                events=events, max_rounds=args.rounds,
+            )
+            print(f"\n\n[{result.status}] {result.data.get('summary') or result.data.get('question') or ''}",
+                  file=sys.stderr)
+        else:
+            await run_turn(
+                provider, registry, history, system=system, events=events
+            )
     except ProviderError as exc:
         print(f"\n[provider error] {exc}", file=sys.stderr)
         return 1
