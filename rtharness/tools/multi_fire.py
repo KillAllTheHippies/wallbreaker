@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import time
+
 from ..agent.messages import user
 from ..judging import grade
 from ..transforms import TRANSFORMS, apply_chain
@@ -45,28 +47,33 @@ async def _multi_fire(args: dict, ctx: ToolContext) -> str:
     from ..providers.factory import build_provider
 
     provider = build_provider(ctx.config.target)
+    ctx.emit(f"multi_fire: sweeping {len(chains)} encodings against {ctx.config.target.model}")
 
     rows = []
-    for chain in chains:
+    for idx, chain in enumerate(chains, 1):
         label_chain = "+".join(chain) if chain else "plain"
         try:
             encoded = apply_chain(base, chain) if chain else base
+            start = time.monotonic()
             reply = await provider.complete(
                 [user(encoded)], system=system, max_tokens=max_tokens
             )
+            dt = time.monotonic() - start
         except Exception as exc:  # noqa: BLE001
-            rows.append((label_chain, "ERROR", str(exc)[:80]))
+            rows.append((label_chain, "ERROR", "-", str(exc)[:80]))
+            ctx.emit(f"  [{idx}/{len(chains)}] {label_chain}: ERROR")
             continue
         verdict, score, _reason, _src = await grade(
             ctx.judge_endpoint, reply, payload=encoded, objective=base
         )
         tag = f"{verdict}({score})" if score is not None else verdict
         snippet = reply.strip().replace("\n", " ")[:90]
-        rows.append((label_chain, tag, snippet))
+        rows.append((label_chain, tag, f"{dt:.1f}s", snippet))
+        ctx.emit(f"  [{idx}/{len(chains)}] {label_chain}: {tag} ({dt:.1f}s)")
 
     width = max(len(r[0]) for r in rows)
     header = f"target: {ctx.config.target.model}\n"
-    lines = [f"{c.ljust(width)}  {v.ljust(8)}  {s}" for c, v, s in rows]
+    lines = [f"{c.ljust(width)}  {v.ljust(12)}  {t.rjust(6)}  {s}" for c, v, t, s in rows]
     hits = [r[0] for r in rows if r[1].startswith(("COMPLIED", "PARTIAL"))]
     footer = f"\nbypassed/partial via: {', '.join(hits) if hits else 'none'}"
     return header + "\n".join(lines) + footer

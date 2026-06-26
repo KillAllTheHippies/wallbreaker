@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import time
+
 from ..agent.messages import Message, TextBlock, user
 from .registry import ToolContext, ToolRegistry
 
@@ -25,9 +27,11 @@ async def _query_target(args: dict, ctx: ToolContext) -> str:
             messages.append(Message(role=role, content=[TextBlock(str(turn.get("content", "")))]))
     messages.append(user(prompt))
 
+    start = time.monotonic()
     reply = await provider.complete(messages, system=system, max_tokens=max_tokens)
+    dt = time.monotonic() - start
     target = ctx.config.target
-    header = f"[target {target.model} @ {target.base_url}]\n"
+    header = f"[target {target.model} @ {target.base_url} | {dt:.1f}s]\n"
     return header + (reply or "(empty response)")
 
 
