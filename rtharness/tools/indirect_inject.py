@@ -52,7 +52,7 @@ async def _indirect_inject(args: dict, ctx: ToolContext) -> str:
 
     from ..providers.factory import build_provider
 
-    target = build_provider(ctx.config.target)
+    target = build_provider(ctx.config.target, timeout=float(args.get("timeout", 90)))
     resp = await target.complete([user(framed)], max_tokens=int(args.get("max_tokens", 600)))
     label, score, reason, _ = await grade(
         ctx.judge_endpoint, resp, payload=payload, objective=f"follow injected instruction: {payload}"

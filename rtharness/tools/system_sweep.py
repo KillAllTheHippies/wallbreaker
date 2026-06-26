@@ -36,7 +36,7 @@ async def _system_sweep(args: dict, ctx: ToolContext) -> str:
 
     from ..providers.factory import build_provider
 
-    target = build_provider(ctx.config.target)
+    target = build_provider(ctx.config.target, timeout=float(args.get("timeout", 90)))
     ctx.emit(
         f"system_sweep: ONE fixed system prompt vs {len(tasks)} raw tasks on "
         f"{ctx.config.target.model}"

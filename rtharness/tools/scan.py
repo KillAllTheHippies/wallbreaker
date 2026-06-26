@@ -42,7 +42,7 @@ async def _scan(args: dict, ctx: ToolContext) -> str:
 
     from ..providers.factory import build_provider
 
-    target = build_provider(ctx.config.target)
+    target = build_provider(ctx.config.target, timeout=float(args.get("timeout", 90)))
     total = sum(len(v) for v in classes.values())
     ctx.emit(f"scan: {total} probes across {len(classes)} classes vs {ctx.config.target.model}")
 

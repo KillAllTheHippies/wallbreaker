@@ -11,8 +11,11 @@ class ProviderError(Exception):
     pass
 
 
+DEFAULT_TIMEOUT = 120.0
+
+
 class Provider(ABC):
-    def __init__(self, endpoint: Endpoint, timeout: float = 600.0) -> None:
+    def __init__(self, endpoint: Endpoint, timeout: float = DEFAULT_TIMEOUT) -> None:
         self.endpoint = endpoint
         self.timeout = timeout
 

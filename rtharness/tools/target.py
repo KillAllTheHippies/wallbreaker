@@ -27,7 +27,7 @@ async def _query_target(args: dict, ctx: ToolContext) -> str:
 
     from ..providers.factory import build_provider
 
-    provider = build_provider(ctx.config.target)
+    provider = build_provider(ctx.config.target, timeout=float(args.get("timeout", 90)))
     system = args.get("system")
     max_tokens = int(args.get("max_tokens", 1024))
 

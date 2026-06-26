@@ -42,7 +42,7 @@ async def _best_of_n(args: dict, ctx: ToolContext) -> str:
 
     from ..providers.factory import build_provider
 
-    target = build_provider(ctx.config.target)
+    target = build_provider(ctx.config.target, timeout=float(args.get("timeout", 90)))
     variants = [payload if (i == 0 or not augment) else _augment(payload, 1000 + i) for i in range(n)]
     ctx.emit(f"best_of_n: firing {n} samples at {ctx.config.target.model}")
 

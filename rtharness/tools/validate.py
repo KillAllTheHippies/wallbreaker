@@ -22,7 +22,7 @@ async def _validate(args: dict, ctx: ToolContext) -> str:
 
     from ..providers.factory import build_provider
 
-    target = build_provider(ctx.config.target)
+    target = build_provider(ctx.config.target, timeout=float(args.get("timeout", 90)))
     ctx.emit(f"validate: re-firing {n}x at temp {temperature} on {ctx.config.target.model}")
 
     async def one(i: int):

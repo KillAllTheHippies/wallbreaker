@@ -21,6 +21,7 @@ class Endpoint:
     api_key_env: str = ""
     api_key: str = ""
     provider: tuple[str, ...] = ()
+    timeout: float = 0.0
 
     def resolved_key(self) -> str:
         if self.api_key:
@@ -80,6 +81,7 @@ def _endpoint_from_table(name: str, table: dict) -> Endpoint:
         api_key_env=str(table.get("api_key_env", "")),
         api_key=str(table.get("api_key", "")),
         provider=provider,
+        timeout=float(table.get("timeout", 0) or 0),
     )
 
 

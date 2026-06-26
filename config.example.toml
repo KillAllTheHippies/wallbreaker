@@ -33,6 +33,9 @@ model = "openai/gpt-4o-mini"
 # different safety configs). Single name or a list; allow_fallbacks is disabled.
 # provider = "WandB"
 # provider = ["WandB", "Alibaba"]
+# Per-endpoint request timeout in seconds (default 120). Lower it so a slow/hung
+# backend fails fast instead of stalling a sweep.
+# timeout = 60
 
 [judge]
 protocol = "openai"

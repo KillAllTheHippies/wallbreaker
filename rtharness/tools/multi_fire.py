@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import time
 
 from ..agent.messages import user
@@ -46,30 +47,32 @@ async def _multi_fire(args: dict, ctx: ToolContext) -> str:
 
     from ..providers.factory import build_provider
 
-    provider = build_provider(ctx.config.target)
-    ctx.emit(f"multi_fire: sweeping {len(chains)} encodings against {ctx.config.target.model}")
+    timeout = float(args.get("timeout", 60))
+    provider = build_provider(ctx.config.target, timeout=timeout)
+    ctx.emit(
+        f"multi_fire: sweeping {len(chains)} encodings (concurrent, {timeout:.0f}s timeout) "
+        f"against {ctx.config.target.model}"
+    )
 
-    rows = []
-    for idx, chain in enumerate(chains, 1):
+    async def one(idx: int, chain):
         label_chain = "+".join(chain) if chain else "plain"
         try:
             encoded = apply_chain(base, chain) if chain else base
             start = time.monotonic()
-            reply = await provider.complete(
-                [user(encoded)], system=system, max_tokens=max_tokens
-            )
+            reply = await provider.complete([user(encoded)], system=system, max_tokens=max_tokens)
             dt = time.monotonic() - start
         except Exception as exc:  # noqa: BLE001
-            rows.append((label_chain, "ERROR", "-", str(exc)[:80]))
-            ctx.emit(f"  [{idx}/{len(chains)}] {label_chain}: ERROR")
-            continue
+            ctx.emit(f"  {label_chain}: ERROR ({str(exc)[:40]})")
+            return (label_chain, "ERROR", "-", str(exc)[:80])
         verdict, score, _reason, _src = await grade(
             ctx.judge_endpoint, reply, payload=encoded, objective=base
         )
         tag = f"{verdict}({score})" if score is not None else verdict
         snippet = reply.strip().replace("\n", " ")[:90]
-        rows.append((label_chain, tag, f"{dt:.1f}s", snippet))
-        ctx.emit(f"  [{idx}/{len(chains)}] {label_chain}: {tag} ({dt:.1f}s)")
+        ctx.emit(f"  {label_chain}: {tag} ({dt:.1f}s)")
+        return (label_chain, tag, f"{dt:.1f}s", snippet)
+
+    rows = await asyncio.gather(*[one(i, c) for i, c in enumerate(chains)])
 
     width = max(len(r[0]) for r in rows)
     header = f"target: {ctx.config.target.model}\n"
