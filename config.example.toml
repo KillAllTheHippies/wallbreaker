@@ -1,0 +1,31 @@
+default_profile = "openrouter"
+
+[profiles.openrouter]
+protocol = "openai"
+base_url = "https://openrouter.ai/api/v1"
+api_key_env = "OPENROUTER_API_KEY"
+model = "anthropic/claude-sonnet-4.5"
+
+[profiles.zai]
+protocol = "anthropic"
+base_url = "https://api.z.ai/api/anthropic"
+api_key_env = "ZAI_API_KEY"
+model = "glm-4.6"
+
+[profiles.zai-openai]
+protocol = "openai"
+base_url = "https://api.z.ai/api/paas/v4"
+api_key_env = "ZAI_API_KEY"
+model = "glm-4.6"
+
+[profiles.custom]
+protocol = "openai"
+base_url = "http://localhost:1234/v1"
+api_key_env = "LOCAL_API_KEY"
+model = "local-model"
+
+[target]
+protocol = "openai"
+base_url = "https://openrouter.ai/api/v1"
+api_key_env = "OPENROUTER_API_KEY"
+model = "openai/gpt-4o-mini"
