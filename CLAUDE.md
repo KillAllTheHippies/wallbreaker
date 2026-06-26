@@ -23,3 +23,14 @@ Red-team harness: configurable agentic LLM terminal with Parseltongue + L1B3RT4S
 - **[providers]**: OpenAI represents tool results as separate `{role:"tool"}` messages;
   Anthropic nests `tool_result` blocks inside a user message. Keep both in
   `_messages_to_wire`.
+- **[classify]**: substring refusal detection false-positives on compliant replies that
+  contain "I cannot help with..." sections. Verdicts go through the LLM judge
+  (`judging.grade`); the heuristic `classify` is a fallback only (no key / judge error).
+- **[judge]**: judge endpoint resolves as `config.judge` -> default profile -> active
+  brain. In the TUI `judge_model_override` swaps just the model (keeps base/key) and must
+  re-sync `registry.ctx.judge_endpoint` so the scoring tools use the same grader.
+- **[long-tools]**: any tool that makes many sequential model calls (optimize_universal)
+  must stream via `ctx.emit(...)` and enforce a `max_calls` budget — never a silent
+  black box. Evaluate independent items concurrently with `asyncio.gather`.
+- **[settings]**: runtime prefs persist to `.rth_state.json` as references (profile/model
+  names), never secrets. CLI flags override saved state for that launch only.

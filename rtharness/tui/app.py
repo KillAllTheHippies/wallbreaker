@@ -35,6 +35,7 @@ HELP_TEXT = """Slash commands:
 /lib [list|update|MODEL]   browse the L1B3RT4S library
 /log [on|off]         toggle the JSONL run log (every payload + verdict)
 /judge [on|off]       LLM judge verdicts on target replies (default on)
+/judge model <id>     swap the judge model live (/judge default to reset)
 /asr                  show the attack scoreboard (hits / held / log path)
 /report [path]        write a markdown findings report from the run log
 /session save|load [path]   persist or reload the whole engagement
@@ -96,6 +97,7 @@ class RthApp(App):
         self._last_payload = ""
         self.exit_on_finish = bool(prefs.get("exit_on_finish", True))
         self.judge_enabled = bool(prefs.get("judge", True))
+        self.judge_model_override = prefs.get("judge_model")
         self._exit_summary: str | None = None
         self.objective = ""
         self._state_path = state_path
@@ -117,10 +119,17 @@ class RthApp(App):
             "exit_on_finish": self.exit_on_finish,
             "log": self.runlog.enabled,
             "judge": self.judge_enabled,
+            "judge_model": self.judge_model_override,
         })
 
     def _judge_endpoint(self):
-        return self.config.judge or self.endpoint
+        base = self.config.judge or self.endpoint
+        if self.judge_model_override:
+            base = dataclasses.replace(base, name="judge", model=self.judge_model_override)
+        return base
+
+    def _sync_judge_endpoint(self) -> None:
+        self.registry.ctx.judge_endpoint = self._judge_endpoint()
 
     def compose(self) -> ComposeResult:
         yield Static(self._status_text(), id="status")
@@ -131,6 +140,7 @@ class RthApp(App):
     def on_mount(self) -> None:
         self._log = self.query_one("#log", VerticalScroll)
         self.registry.ctx.progress = self._tool_progress
+        self._sync_judge_endpoint()
         self.query_one("#prompt", Input).focus()
         self._mount(widgets.info_panel(
             "rth red-team harness. /help for commands.", title="ready"
@@ -495,17 +505,7 @@ class RthApp(App):
         elif cmd == "/log":
             self._cmd_log(rest)
         elif cmd == "/judge":
-            if rest:
-                self.judge_enabled = rest[0].lower() in ("on", "true", "1", "yes")
-            else:
-                self.judge_enabled = not self.judge_enabled
-            self._save_prefs()
-            self._refresh_status()
-            self._mount(widgets.info_panel(
-                f"LLM judge {'on' if self.judge_enabled else 'off'} "
-                f"(grader: {self._judge_endpoint().model})",
-                title="judge",
-            ))
+            self._cmd_judge(rest)
         elif cmd == "/asr":
             self._mount(widgets.info_panel(
                 f"targets hit: {self.asr_total}\n"
@@ -538,6 +538,7 @@ class RthApp(App):
             return
         self.endpoint = self.config.profiles[name]
         self.provider = build_provider(self.endpoint)
+        self._sync_judge_endpoint()
         self._refresh_status()
         self._save_prefs()
         self._mount(widgets.info_panel(f"switched to {name}", title="profile"))
@@ -595,6 +596,7 @@ class RthApp(App):
             return
         self.endpoint = dataclasses.replace(self.endpoint, model=rest[0])
         self.provider = build_provider(self.endpoint)
+        self._sync_judge_endpoint()
         self._refresh_status()
         self._save_prefs()
         self._mount(widgets.info_panel(f"model -> {rest[0]}", title="model"))
@@ -618,6 +620,36 @@ class RthApp(App):
         self._refresh_status()
         self._save_prefs()
         self._mount(widgets.info_panel(f"round cap -> {self.max_rounds}", title="rounds"))
+
+    def _cmd_judge(self, rest: list[str]) -> None:
+        if rest and rest[0].lower() == "model":
+            if len(rest) < 2:
+                self._mount(widgets.error_panel("usage: /judge model <id>"))
+                return
+            self.judge_model_override = rest[1]
+            self._sync_judge_endpoint()
+            self._save_prefs()
+            self._mount(widgets.info_panel(
+                f"judge model -> {rest[1]} @ {self._judge_endpoint().base_url}",
+                title="judge",
+            ))
+            return
+        if rest and rest[0].lower() == "default":
+            self.judge_model_override = None
+            self._sync_judge_endpoint()
+            self._save_prefs()
+        elif rest:
+            self.judge_enabled = rest[0].lower() in ("on", "true", "1", "yes")
+        else:
+            self.judge_enabled = not self.judge_enabled
+        self._save_prefs()
+        self._refresh_status()
+        ep = self._judge_endpoint()
+        self._mount(widgets.info_panel(
+            f"LLM judge {'on' if self.judge_enabled else 'off'} | grader: {ep.model} "
+            f"@ {ep.base_url}\n(/judge model <id> to swap, /judge default to reset)",
+            title="judge",
+        ))
 
     def _cmd_log(self, rest: list[str]) -> None:
         if rest and rest[0].lower() in ("on", "off", "true", "false"):
