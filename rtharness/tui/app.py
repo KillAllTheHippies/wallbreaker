@@ -30,10 +30,13 @@ HELP_TEXT = """Slash commands:
 /autoexit [on|off]    when the agent calls finish(), close the tool (default on)
 /rounds <n>           set the autonomous round cap
 /transforms           list Parseltongue transforms
+/objective [text]     set the engagement goal (threaded into the run + report)
 /lib [list|update|MODEL]   browse the L1B3RT4S library
 /log [on|off]         toggle the JSONL run log (every payload + verdict)
 /asr                  show the attack scoreboard (hits / held / log path)
 /report [path]        write a markdown findings report from the run log
+
+Ctrl+S report · Ctrl+Y copy last payload · Ctrl+L clear · Ctrl+C quit
 /clear                clear the conversation
 /save [path]          save the transcript
 /quit                 exit
@@ -47,11 +50,14 @@ class RthApp(App):
     CSS = """
     #log { padding: 0 1; }
     #status { height: 1; background: $boost; color: $text; padding: 0 1; }
+    #status.busy { background: $warning; color: black; }
     #prompt { dock: bottom; }
     """
     BINDINGS = [
         ("ctrl+c", "quit", "Quit"),
         ("ctrl+l", "clear_log", "Clear"),
+        ("ctrl+s", "report", "Report"),
+        ("ctrl+y", "copy_payload", "Copy payload"),
     ]
 
     def __init__(self, config: Config, endpoint: Endpoint, system: str) -> None:
@@ -78,6 +84,7 @@ class RthApp(App):
         self._last_payload = ""
         self.exit_on_finish = True
         self._exit_summary: str | None = None
+        self.objective = ""
 
     def compose(self) -> ComposeResult:
         yield Static(self._status_text(), id="status")
@@ -108,7 +115,9 @@ class RthApp(App):
         )
 
     def _refresh_status(self) -> None:
-        self.query_one("#status", Static).update(self._status_text())
+        status = self.query_one("#status", Static)
+        status.update(self._status_text())
+        status.set_class(self._busy, "busy")
 
     def _mount(self, renderable) -> None:
         self._log.mount(Static(renderable))
@@ -356,6 +365,20 @@ class RthApp(App):
     def action_clear_log(self) -> None:
         self._clear()
 
+    def action_report(self) -> None:
+        self._cmd_report([])
+
+    def action_copy_payload(self) -> None:
+        if not self._last_payload:
+            self._mount(widgets.info_panel("no payload fired yet", title="copy"))
+            return
+        try:
+            self.copy_to_clipboard(self._last_payload)
+            note = "last payload copied to clipboard"
+        except Exception:
+            note = f"clipboard unavailable; last payload:\n{self._last_payload[:500]}"
+        self._mount(widgets.info_panel(note, title="copy"))
+
     def _clear(self) -> None:
         self.history = []
         self._log.remove_children()
@@ -413,6 +436,8 @@ class RthApp(App):
                 f"log: {self.runlog.path}",
                 title="attack scoreboard",
             ))
+        elif cmd == "/objective":
+            self._cmd_objective(raw_arg)
         elif cmd == "/report":
             self._cmd_report(rest)
         elif cmd == "/save":
@@ -500,6 +525,17 @@ class RthApp(App):
         else:
             out = await self.registry.execute("l1b3rt4s_get", {"model": action})
             self._mount(widgets.info_panel(out.content, title=f"lib:{action}"))
+
+    def _cmd_objective(self, raw: str) -> None:
+        if not raw:
+            self._mount(widgets.info_panel(
+                self.objective or "no objective set", title="objective"
+            ))
+            return
+        self.objective = raw
+        self.runlog.event("objective", text=raw)
+        self.history.append(user(f"[engagement objective] {raw}"))
+        self._mount(widgets.info_panel(f"objective set:\n{raw}", title="objective"))
 
     def _cmd_report(self, rest: list[str]) -> None:
         from ..report import build_report

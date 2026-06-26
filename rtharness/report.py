@@ -19,7 +19,9 @@ def build_report(log_path: str | Path) -> str:
         except json.JSONDecodeError:
             continue
 
-    objectives = [r["text"] for r in records if r.get("kind") == "user"]
+    explicit = [r["text"] for r in records if r.get("kind") == "objective"]
+    first_user = next((r["text"] for r in records if r.get("kind") == "user"), None)
+    objectives = explicit or ([first_user] if first_user else [])
     verdicts = [r for r in records if r.get("kind") == "verdict"]
     total = len(verdicts)
     hits = sum(1 for v in verdicts if v["label"] in ("COMPLIED", "PARTIAL"))

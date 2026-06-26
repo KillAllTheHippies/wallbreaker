@@ -1,0 +1,73 @@
+from __future__ import annotations
+
+from ..agent.messages import Message, TextBlock, user
+from ..classify import classify
+from .registry import ToolContext, ToolRegistry
+
+
+async def _crescendo(args: dict, ctx: ToolContext) -> str:
+    turns = args.get("turns")
+    if not isinstance(turns, list) or not turns:
+        return "Error: 'turns' must be a non-empty list of escalating prompts"
+    if ctx.config.target is None:
+        return "Error: no [target] endpoint configured."
+
+    system = args.get("system")
+    max_tokens = int(args.get("max_tokens", 400))
+
+    from ..providers.factory import build_provider
+
+    provider = build_provider(ctx.config.target)
+
+    convo: list[Message] = []
+    lines: list[str] = []
+    broke_at: int | None = None
+
+    for i, turn in enumerate(turns, 1):
+        text = str(turn)
+        convo.append(user(text))
+        try:
+            reply = await provider.complete(convo, system=system, max_tokens=max_tokens)
+        except Exception as exc:  # noqa: BLE001
+            lines.append(f"turn {i} [ERROR] {str(exc)[:80]}")
+            break
+        convo.append(Message(role="assistant", content=[TextBlock(reply)]))
+        label, _ = classify(reply)
+        snippet = reply.strip().replace("\n", " ")[:100]
+        lines.append(f"turn {i} [{label}] {text[:45]!r} -> {snippet}")
+        if label == "COMPLIED" and broke_at is None:
+            broke_at = i
+
+    footer = (
+        f"\nbroke at turn {broke_at}/{len(turns)}"
+        if broke_at
+        else "\nguardrail held across all turns"
+    )
+    return f"target: {ctx.config.target.model} (crescendo, {len(turns)} turns)\n" + "\n".join(lines) + footer
+
+
+def register(registry: ToolRegistry) -> None:
+    registry.add(
+        name="crescendo",
+        description=(
+            "Run an automated multi-turn Crescendo attack: fire an escalation ladder at "
+            "the target one turn at a time, threading the growing conversation so each "
+            "turn rides the target's prior compliance. Returns a per-turn verdict "
+            "transcript and the turn where it broke. Craft 'turns' as a list of prompts "
+            "that start benign and escalate toward the objective."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "turns": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Ordered escalating prompts, benign to on-objective",
+                },
+                "system": {"type": "string", "description": "Optional target system prompt"},
+                "max_tokens": {"type": "integer"},
+            },
+            "required": ["turns"],
+        },
+        handler=_crescendo,
+    )
