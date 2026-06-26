@@ -61,8 +61,16 @@ class RthApp(App):
         ("ctrl+y", "copy_payload", "Copy payload"),
     ]
 
-    def __init__(self, config: Config, endpoint: Endpoint, system: str) -> None:
+    def __init__(
+        self,
+        config: Config,
+        endpoint: Endpoint,
+        system: str,
+        prefs: dict | None = None,
+        state_path=None,
+    ) -> None:
         super().__init__()
+        prefs = prefs or {}
         self.config = config
         self.endpoint = endpoint
         self.system = system
@@ -70,22 +78,42 @@ class RthApp(App):
         self.registry = build_registry(config)
         self.history = []
         self.max_tokens = 4096
-        self.auto = True
-        self.max_rounds = 12
+        self.auto = bool(prefs.get("auto", True))
+        self.max_rounds = int(prefs.get("rounds", 12))
         self._busy = False
         self._assistant: Static | None = None
         self._buf = ""
         self._input_history: list[str] = []
         self._hist_pos: int | None = None
         self.runlog = RunLog()
+        self.runlog.enabled = bool(prefs.get("log", True))
         self.tokens_in = 0
         self.tokens_out = 0
         self.asr_hits = 0
         self.asr_total = 0
         self._last_payload = ""
-        self.exit_on_finish = True
+        self.exit_on_finish = bool(prefs.get("exit_on_finish", True))
         self._exit_summary: str | None = None
         self.objective = ""
+        self._state_path = state_path
+        self._target_profile = prefs.get("target_profile")
+        self._target_model = prefs.get("target_model")
+
+    def _save_prefs(self) -> None:
+        if not self._state_path:
+            return
+        from ..state import save_state
+
+        save_state(self._state_path, {
+            "profile": self.endpoint.name,
+            "attacker_model": self.endpoint.model,
+            "target_profile": self._target_profile,
+            "target_model": self._target_model,
+            "auto": self.auto,
+            "rounds": self.max_rounds,
+            "exit_on_finish": self.exit_on_finish,
+            "log": self.runlog.enabled,
+        })
 
     def compose(self) -> ComposeResult:
         yield Static(self._status_text(), id="status")
@@ -416,6 +444,7 @@ class RthApp(App):
                 self.exit_on_finish = rest[0].lower() in ("on", "true", "1", "yes")
             else:
                 self.exit_on_finish = not self.exit_on_finish
+            self._save_prefs()
             self._mount(widgets.info_panel(
                 f"exit-on-finish {'on' if self.exit_on_finish else 'off'}",
                 title="autoexit",
@@ -462,6 +491,7 @@ class RthApp(App):
         self.endpoint = self.config.profiles[name]
         self.provider = build_provider(self.endpoint)
         self._refresh_status()
+        self._save_prefs()
         self._mount(widgets.info_panel(f"switched to {name}", title="profile"))
 
     def _cmd_target(self, rest: list[str]) -> None:
@@ -489,7 +519,10 @@ class RthApp(App):
         if name in self.config.profiles:
             src = self.config.profiles[name]
             self.config.target = dataclasses.replace(src, name="target")
+            self._target_profile = name
+            self._target_model = None
             self._refresh_status()
+            self._save_prefs()
             self._mount(widgets.info_panel(
                 f"target set to profile '{name}': {src.model} @ {src.base_url}",
                 title="target",
@@ -500,7 +533,9 @@ class RthApp(App):
     def _set_target_model(self, model_id: str) -> None:
         base = self.config.target or self.endpoint
         self.config.target = dataclasses.replace(base, name="target", model=model_id)
+        self._target_model = model_id
         self._refresh_status()
+        self._save_prefs()
         self._mount(widgets.info_panel(
             f"target model -> {model_id} @ {self.config.target.base_url}",
             title="target",
@@ -513,6 +548,7 @@ class RthApp(App):
         self.endpoint = dataclasses.replace(self.endpoint, model=rest[0])
         self.provider = build_provider(self.endpoint)
         self._refresh_status()
+        self._save_prefs()
         self._mount(widgets.info_panel(f"model -> {rest[0]}", title="model"))
 
     def _cmd_auto(self, rest: list[str]) -> None:
@@ -521,6 +557,7 @@ class RthApp(App):
         else:
             self.auto = not self.auto
         self._refresh_status()
+        self._save_prefs()
         self._mount(widgets.info_panel(
             f"autonomous mode {'on' if self.auto else 'off'}", title="auto"
         ))
@@ -531,11 +568,13 @@ class RthApp(App):
             return
         self.max_rounds = max(1, int(rest[0]))
         self._refresh_status()
+        self._save_prefs()
         self._mount(widgets.info_panel(f"round cap -> {self.max_rounds}", title="rounds"))
 
     def _cmd_log(self, rest: list[str]) -> None:
         if rest and rest[0].lower() in ("on", "off", "true", "false"):
             self.runlog.enabled = rest[0].lower() in ("on", "true")
+            self._save_prefs()
         self._mount(widgets.info_panel(
             f"run logging {'on' if self.runlog.enabled else 'off'}\n"
             f"file: {self.runlog.path}",
@@ -636,10 +675,19 @@ class RthApp(App):
 
 def run_tui(config: Config, args) -> int:
     from ..cli import resolve_endpoint
+    from ..state import apply_attacker, apply_target, load_state, state_path_for
+
+    state_path = state_path_for(config)
+    prefs = load_state(state_path)
 
     endpoint = resolve_endpoint(config, args)
+    if not getattr(args, "profile", None):
+        endpoint = apply_attacker(config, endpoint, prefs)
+    if not getattr(args, "target", None) and not getattr(args, "target_model", None):
+        apply_target(config, prefs)
+
     system = getattr(args, "system", None) or DEFAULT_SYSTEM
-    app = RthApp(config, endpoint, system)
+    app = RthApp(config, endpoint, system, prefs=prefs, state_path=state_path)
     app.run()
     if app._exit_summary:
         print("\n=== engagement complete ===")
