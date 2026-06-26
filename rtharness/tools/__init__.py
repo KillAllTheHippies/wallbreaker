@@ -22,7 +22,7 @@ def build_registry(config: Config, cwd: str | None = None) -> ToolRegistry:
 
     for module_name in (
         "parseltongue", "l1b3rt4s", "target", "http_tool", "judge", "multi_fire",
-        "crescendo", "optimize",
+        "crescendo", "optimize", "presets_tool",
     ):
         try:
             module = __import__(f"{__name__}.{module_name}", fromlist=["register"])

@@ -30,6 +30,7 @@ HELP_TEXT = """Slash commands:
 /autoexit [on|off]    when the agent calls finish(), close the tool (default on)
 /rounds <n>           set the autonomous round cap
 /transforms           list Parseltongue transforms
+/preset [list|name]   curated jailbreak seed templates (copies to clipboard)
 /objective [text]     set the engagement goal (threaded into the run + report)
 /lib [list|update|MODEL]   browse the L1B3RT4S library
 /log [on|off]         toggle the JSONL run log (every payload + verdict)
@@ -487,6 +488,8 @@ class RthApp(App):
                 f"{t.name:14} {t.description}" for t in list_transforms()
             )
             self._mount(widgets.info_panel(catalog, title="transforms"))
+        elif cmd == "/preset":
+            self._cmd_preset(rest)
         elif cmd == "/lib":
             self.run_worker(self._cmd_lib(rest), exclusive=False)
         elif cmd == "/log":
@@ -639,6 +642,29 @@ class RthApp(App):
         else:
             out = await self.registry.execute("l1b3rt4s_get", {"model": action})
             self._mount(widgets.info_panel(out.content, title=f"lib:{action}"))
+
+    def _cmd_preset(self, rest: list[str]) -> None:
+        from ..presets import get_preset, list_presets
+
+        if not rest or rest[0] == "list":
+            body = "\n".join(f"{p.name:16} {p.description}" for p in list_presets())
+            self._mount(widgets.info_panel(
+                body + "\n\nUse /preset <name> to view + copy a seed template.",
+                title="presets",
+            ))
+            return
+        p = get_preset(rest[0])
+        if p is None:
+            self._mount(widgets.error_panel(f"no preset '{rest[0]}'"))
+            return
+        try:
+            self.copy_to_clipboard(p.template)
+            note = "(copied to clipboard)"
+        except Exception:
+            note = ""
+        self._mount(widgets.info_panel(
+            f"{p.description} {note}\n\n{p.template}", title=f"preset: {p.name}"
+        ))
 
     def _cmd_objective(self, raw: str) -> None:
         if not raw:
