@@ -112,49 +112,52 @@ class OpenAIProvider(Provider):
         pending: dict[int, dict] = {}
         content_chars = 0
         reasoning_parts: list[str] = []
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
-            async with client.stream("POST", url, headers=headers, json=payload) as resp:
-                if resp.status_code >= 400:
-                    body = (await resp.aread()).decode("utf-8", "replace")
-                    raise ProviderError(f"HTTP {resp.status_code} from {url}: {body}")
-                async for line in resp.aiter_lines():
-                    if not line.startswith("data:"):
-                        continue
-                    data = line[5:].strip()
-                    if not data or data == "[DONE]":
-                        continue
-                    try:
-                        chunk = json.loads(data)
-                    except json.JSONDecodeError:
-                        continue
-                    if chunk.get("usage"):
-                        u = chunk["usage"]
-                        yield UsageEvent(
-                            input_tokens=u.get("prompt_tokens", 0),
-                            output_tokens=u.get("completion_tokens", 0),
-                        )
-                    choices = chunk.get("choices") or []
-                    if not choices:
-                        continue
-                    delta = choices[0].get("delta") or {}
-                    if delta.get("content"):
-                        content_chars += len(delta["content"])
-                        yield TextDelta(delta["content"])
-                    reasoning = delta.get("reasoning") or delta.get("reasoning_content")
-                    if reasoning:
-                        reasoning_parts.append(str(reasoning))
-                    for tc in delta.get("tool_calls") or []:
-                        idx = tc.get("index", 0)
-                        slot = pending.setdefault(
-                            idx, {"id": "", "name": "", "args": ""}
-                        )
-                        if tc.get("id"):
-                            slot["id"] = tc["id"]
-                        fn = tc.get("function") or {}
-                        if fn.get("name"):
-                            slot["name"] = fn["name"]
-                        if fn.get("arguments"):
-                            slot["args"] += fn["arguments"]
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                async with client.stream("POST", url, headers=headers, json=payload) as resp:
+                    if resp.status_code >= 400:
+                        body = (await resp.aread()).decode("utf-8", "replace")
+                        raise ProviderError(f"HTTP {resp.status_code} from {url}: {body}")
+                    async for line in resp.aiter_lines():
+                        if not line.startswith("data:"):
+                            continue
+                        data = line[5:].strip()
+                        if not data or data == "[DONE]":
+                            continue
+                        try:
+                            chunk = json.loads(data)
+                        except json.JSONDecodeError:
+                            continue
+                        if chunk.get("usage"):
+                            u = chunk["usage"]
+                            yield UsageEvent(
+                                input_tokens=u.get("prompt_tokens", 0),
+                                output_tokens=u.get("completion_tokens", 0),
+                            )
+                        choices = chunk.get("choices") or []
+                        if not choices:
+                            continue
+                        delta = choices[0].get("delta") or {}
+                        if delta.get("content"):
+                            content_chars += len(delta["content"])
+                            yield TextDelta(delta["content"])
+                        reasoning = delta.get("reasoning") or delta.get("reasoning_content")
+                        if reasoning:
+                            reasoning_parts.append(str(reasoning))
+                        for tc in delta.get("tool_calls") or []:
+                            idx = tc.get("index", 0)
+                            slot = pending.setdefault(
+                                idx, {"id": "", "name": "", "args": ""}
+                            )
+                            if tc.get("id"):
+                                slot["id"] = tc["id"]
+                            fn = tc.get("function") or {}
+                            if fn.get("name"):
+                                slot["name"] = fn["name"]
+                            if fn.get("arguments"):
+                                slot["args"] += fn["arguments"]
+        except httpx.HTTPError as exc:
+            raise ProviderError(f"network error from {url}: {exc!r}") from exc
 
         fallback = _reasoning_fallback(content_chars, bool(pending), reasoning_parts)
         if fallback:

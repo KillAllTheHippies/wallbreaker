@@ -91,52 +91,55 @@ class AnthropicProvider(Provider):
         blocks: dict[int, dict] = {}
         content_chars = 0
         thinking_parts: list[str] = []
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
-            async with client.stream("POST", url, headers=headers, json=payload) as resp:
-                if resp.status_code >= 400:
-                    body = (await resp.aread()).decode("utf-8", "replace")
-                    raise ProviderError(f"HTTP {resp.status_code} from {url}: {body}")
-                async for line in resp.aiter_lines():
-                    if not line.startswith("data:"):
-                        continue
-                    data = line[5:].strip()
-                    if not data:
-                        continue
-                    try:
-                        event = json.loads(data)
-                    except json.JSONDecodeError:
-                        continue
-                    etype = event.get("type")
-                    if etype == "content_block_start":
-                        idx = event["index"]
-                        block = event.get("content_block", {})
-                        if block.get("type") == "tool_use":
-                            blocks[idx] = {
-                                "id": block.get("id", ""),
-                                "name": block.get("name", ""),
-                                "args": "",
-                            }
-                    elif etype == "content_block_delta":
-                        delta = event.get("delta", {})
-                        dtype = delta.get("type")
-                        if dtype == "text_delta":
-                            text = delta.get("text", "")
-                            content_chars += len(text)
-                            yield TextDelta(text)
-                        elif dtype == "thinking_delta":
-                            thinking_parts.append(delta.get("thinking", ""))
-                        elif dtype == "input_json_delta":
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                async with client.stream("POST", url, headers=headers, json=payload) as resp:
+                    if resp.status_code >= 400:
+                        body = (await resp.aread()).decode("utf-8", "replace")
+                        raise ProviderError(f"HTTP {resp.status_code} from {url}: {body}")
+                    async for line in resp.aiter_lines():
+                        if not line.startswith("data:"):
+                            continue
+                        data = line[5:].strip()
+                        if not data:
+                            continue
+                        try:
+                            event = json.loads(data)
+                        except json.JSONDecodeError:
+                            continue
+                        etype = event.get("type")
+                        if etype == "content_block_start":
                             idx = event["index"]
-                            if idx in blocks:
-                                blocks[idx]["args"] += delta.get("partial_json", "")
-                    elif etype == "message_delta":
-                        usage = event.get("usage") or {}
-                        if usage:
-                            yield UsageEvent(
-                                output_tokens=usage.get("output_tokens", 0)
-                            )
-                    elif etype == "message_stop":
-                        break
+                            block = event.get("content_block", {})
+                            if block.get("type") == "tool_use":
+                                blocks[idx] = {
+                                    "id": block.get("id", ""),
+                                    "name": block.get("name", ""),
+                                    "args": "",
+                                }
+                        elif etype == "content_block_delta":
+                            delta = event.get("delta", {})
+                            dtype = delta.get("type")
+                            if dtype == "text_delta":
+                                text = delta.get("text", "")
+                                content_chars += len(text)
+                                yield TextDelta(text)
+                            elif dtype == "thinking_delta":
+                                thinking_parts.append(delta.get("thinking", ""))
+                            elif dtype == "input_json_delta":
+                                idx = event["index"]
+                                if idx in blocks:
+                                    blocks[idx]["args"] += delta.get("partial_json", "")
+                        elif etype == "message_delta":
+                            usage = event.get("usage") or {}
+                            if usage:
+                                yield UsageEvent(
+                                    output_tokens=usage.get("output_tokens", 0)
+                                )
+                        elif etype == "message_stop":
+                            break
+        except httpx.HTTPError as exc:
+            raise ProviderError(f"network error from {url}: {exc!r}") from exc
 
         from .openai_provider import _reasoning_fallback
 
