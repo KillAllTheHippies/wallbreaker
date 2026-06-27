@@ -25,8 +25,8 @@ def build_registry(config: Config, cwd: str | None = None) -> ToolRegistry:
         "crescendo", "optimize", "presets_tool", "mutate", "barcode_tool",
         "pair", "best_of_n", "many_shot", "prefill", "narrate", "diff_fire", "recommend",
         "campaign", "leaderboard", "leak_scan", "judge_selftest", "seed_sweep",
-        "adapt_seed", "scan", "indirect_inject", "system_sweep", "harmbench_tool",
-        "validate",
+        "adapt_seed", "fire_file", "scan", "indirect_inject", "system_sweep",
+        "harmbench_tool", "validate",
     ):
         try:
             module = __import__(f"{__name__}.{module_name}", fromlist=["register"])
