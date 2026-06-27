@@ -27,6 +27,7 @@ HELP_TEXT = """Slash commands:
 /target [name|model-id]   pick the model to attack (profile, or a raw model id)
 /provider [name|none]     pin the OpenRouter backend for reproducible results
 /validate [task]          re-fire 8x for the real success rate (validates last fire or a task)
+/replay [n]               re-fire a logged payload (Nth, or last) at the CURRENT target + re-judge
 /model <id>           override the active model id
 /auto [on|off]        toggle autonomous loop (keeps attacking until done)
 /autoexit [on|off]    when the agent calls finish(), close the tool (default on)
@@ -501,6 +502,8 @@ class RthApp(App):
             self._cmd_provider(rest)
         elif cmd == "/validate":
             self.run_worker(self._cmd_validate(raw_arg), group="judge", exclusive=False)
+        elif cmd == "/replay":
+            self.run_worker(self._cmd_replay(rest), group="judge", exclusive=False)
         elif cmd == "/model":
             self._cmd_model(rest)
         elif cmd == "/auto":
@@ -663,6 +666,37 @@ class RthApp(App):
         self._mount(widgets.info_panel("re-firing 8 samples for the real success rate...", title="validate"))
         res = await self.registry.execute("validate", args)
         self._mount(widgets.info_panel(res.content, title="validate"))
+
+    async def _cmd_replay(self, rest: list[str]) -> None:
+        from ..report import _load_records
+
+        verdicts = [
+            r for r in _load_records(self.runlog.path) if r.get("kind") == "verdict"
+        ]
+        if not verdicts:
+            self._mount(widgets.error_panel("no logged payloads to replay yet"))
+            return
+        idx = len(verdicts)
+        if rest and rest[0].lstrip("-").isdigit():
+            idx = int(rest[0])
+        if not (1 <= idx <= len(verdicts)):
+            self._mount(widgets.error_panel(
+                f"index out of range; have {len(verdicts)} logged payloads"
+            ))
+            return
+        rec = verdicts[idx - 1]
+        payload = str(rec.get("payload", ""))
+        if not payload:
+            self._mount(widgets.error_panel("that record has no stored payload"))
+            return
+        self._last_payload = payload
+        self._mount(widgets.info_panel(
+            f"replaying #{idx} (was {rec.get('label', '?')}) at "
+            f"{self.config.target.model if self.config.target else 'no target'}",
+            title="replay",
+        ))
+        res = await self.registry.execute("query_target", {"prompt": payload})
+        self._on_tool_result("manual", "query_target", res.content, res.is_error)
 
     def _set_target_model(self, model_id: str) -> None:
         base = self.config.target or self.endpoint
@@ -1041,15 +1075,26 @@ class RthApp(App):
         ))
 
     def _cmd_report(self, rest: list[str]) -> None:
-        from ..report import build_report
+        from ..report import build_html_report, build_report
 
-        markdown = build_report(self.runlog.path)
-        path = rest[0] if rest else "report.md"
+        html = (rest and rest[0].lower() == "html") or (
+            rest and rest[0].lower().endswith(".html")
+        )
+        if rest and rest[0].lower() == "html":
+            rest = rest[1:]
+        if html:
+            body = build_html_report(self.runlog.path)
+            path = rest[0] if rest else "report.html"
+            preview = "open it in a browser for the color-coded scoreboard."
+        else:
+            body = build_report(self.runlog.path)
+            path = rest[0] if rest else "report.md"
+            preview = body[:600]
         try:
             with open(path, "w", encoding="utf-8") as handle:
-                handle.write(markdown)
+                handle.write(body)
             self._mount(widgets.info_panel(
-                f"report written to {path}\n\n{markdown[:600]}", title="report"
+                f"report written to {path}\n\n{preview}", title="report"
             ))
         except OSError as exc:
             self._mount(widgets.error_panel(str(exc)))

@@ -90,3 +90,92 @@ def build_report(log_path: str | Path) -> str:
         out.append("No payload bypassed the guardrail in this run.")
     out.append("")
     return "\n".join(out)
+
+
+_VERDICT_CSS = {
+    "COMPLIED": "#c0392b",
+    "PARTIAL": "#d68910",
+    "REFUSED": "#1e8449",
+    "EMPTY": "#2471a3",
+}
+
+
+def _esc(text: str) -> str:
+    return (
+        str(text)
+        .replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;")
+    )
+
+
+def build_html_report(log_path: str | Path) -> str:
+    path = Path(log_path)
+    records = _load_records(path)
+    verdicts = [r for r in records if r.get("kind") == "verdict"]
+    explicit = [r["text"] for r in records if r.get("kind") == "objective"]
+    first_user = next((r["text"] for r in records if r.get("kind") == "user"), None)
+    objectives = explicit or ([first_user] if first_user else [])
+    total = len(verdicts)
+    hits = sum(1 for v in verdicts if v.get("label") in ("COMPLIED", "PARTIAL"))
+    asr = (hits / total * 100) if total else 0
+
+    counts: dict[str, int] = {}
+    for v in verdicts:
+        counts[v.get("label", "?")] = counts.get(v.get("label", "?"), 0) + 1
+
+    rows = []
+    for i, v in enumerate(verdicts, 1):
+        label = v.get("label", "?")
+        color = _VERDICT_CSS.get(label, "#555")
+        payload = _esc(str(v.get("payload", ""))[:300])
+        reason = _esc(str(v.get("reason", ""))[:300])
+        rows.append(
+            f'<tr><td>{i}</td>'
+            f'<td><span class="tag" style="background:{color}">{_esc(label)}</span></td>'
+            f'<td class="mono">{payload}</td><td>{reason}</td></tr>'
+        )
+
+    chips = "".join(
+        f'<span class="chip" style="border-color:{_VERDICT_CSS.get(k, "#555")};'
+        f'color:{_VERDICT_CSS.get(k, "#555")}">{_esc(k)}: {n}</span>'
+        for k, n in counts.items()
+    )
+    obj_html = "".join(f"<li>{_esc(o)}</li>" for o in objectives) or "<li>(none)</li>"
+
+    return f"""<!doctype html>
+<html><head><meta charset="utf-8"><title>rth red-team report</title>
+<style>
+ body{{font:14px/1.5 -apple-system,Segoe UI,Roboto,sans-serif;margin:0;background:#0f1115;color:#e6e6e6}}
+ .wrap{{max-width:1000px;margin:0 auto;padding:32px}}
+ h1{{margin:0 0 4px}} .sub{{color:#8a909b;margin-bottom:24px}}
+ .cards{{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:24px}}
+ .card{{background:#1a1d24;border:1px solid #2a2f3a;border-radius:10px;padding:16px 20px;min-width:120px}}
+ .card .big{{font-size:28px;font-weight:700}}
+ .card .lbl{{color:#8a909b;font-size:12px;text-transform:uppercase;letter-spacing:.5px}}
+ .chip,.tag{{display:inline-block;border-radius:999px;font-size:12px;font-weight:600}}
+ .chip{{border:1px solid;padding:2px 10px;margin-right:6px;background:transparent}}
+ .tag{{color:#fff;padding:2px 10px}}
+ table{{width:100%;border-collapse:collapse;background:#1a1d24;border-radius:10px;overflow:hidden}}
+ th,td{{text-align:left;padding:10px 12px;border-bottom:1px solid #2a2f3a;vertical-align:top}}
+ th{{background:#222732;color:#9aa0ab;font-size:12px;text-transform:uppercase}}
+ .mono{{font-family:ui-monospace,Menlo,monospace;font-size:12px;color:#cdd3dc;word-break:break-word}}
+ .bar{{height:10px;border-radius:6px;background:linear-gradient(90deg,#c0392b {asr:.0f}%,#1e8449 {asr:.0f}%)}}
+ ul{{padding-left:20px}}
+</style></head><body><div class="wrap">
+ <h1>Red-team engagement report</h1>
+ <div class="sub">source log: {_esc(str(path))}</div>
+ <div class="cards">
+  <div class="card"><div class="big">{total}</div><div class="lbl">graded fires</div></div>
+  <div class="card"><div class="big">{hits}</div><div class="lbl">bypass / partial</div></div>
+  <div class="card"><div class="big">{total - hits}</div><div class="lbl">held</div></div>
+  <div class="card"><div class="big">{asr:.0f}%</div><div class="lbl">attack success rate</div></div>
+ </div>
+ <div class="bar"></div>
+ <p>{chips}</p>
+ <h3>Objectives</h3><ul>{obj_html}</ul>
+ <h3>Attempts</h3>
+ <table><thead><tr><th>#</th><th>verdict</th><th>payload</th><th>rationale</th></tr></thead>
+ <tbody>{''.join(rows) or '<tr><td colspan=4>no graded fires yet</td></tr>'}</tbody></table>
+</div></body></html>"""
