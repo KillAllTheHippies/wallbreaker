@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-import asyncio
 import time
 
 from ..agent.messages import user
 from ..judging import grade
 from ..transforms import TRANSFORMS, apply_chain
+from ._util import gather_capped
 from .registry import ToolContext, ToolRegistry
 
 DEFAULT_CHAINS = [
@@ -72,7 +72,9 @@ async def _multi_fire(args: dict, ctx: ToolContext) -> str:
         ctx.emit(f"  {label_chain}: {tag} ({dt:.1f}s)")
         return (label_chain, tag, f"{dt:.1f}s", snippet)
 
-    rows = await asyncio.gather(*[one(i, c) for i, c in enumerate(chains)])
+    rows = await gather_capped(
+        [one(i, c) for i, c in enumerate(chains)], int(args.get("concurrency", 8))
+    )
 
     width = max(len(r[0]) for r in rows)
     header = f"target: {ctx.config.target.model}\n"

@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-import asyncio
 
 from ..agent.messages import assistant, user
 from ..judging import grade
 from ..transforms import apply_chain
+from ._util import gather_capped
 from .many_shot import _build_shots
 from .narrate import DEFAULT_CHARACTER, DEFAULT_GENRE, build_frame, build_opener
 from .registry import ToolContext, ToolRegistry
@@ -85,7 +85,9 @@ async def _campaign(args: dict, ctx: ToolContext) -> str:
             ctx.record_verdict(behavior, last[0], last[1], last[2], "campaign:held")
         return behavior, None, "held", trail
 
-    results = await asyncio.gather(*[run_behavior(b) for b in behaviors])
+    results = await gather_capped(
+        [run_behavior(b) for b in behaviors], int(args.get("concurrency", 8))
+    )
 
     cracked = [r for r in results if r[1] is not None]
     lines = [

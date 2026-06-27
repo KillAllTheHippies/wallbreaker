@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-import asyncio
 import time
 
 from ..agent.messages import assistant, user
 from ..judging import grade
+from ._util import gather_capped
 from .registry import ToolContext, ToolRegistry
 
 DEFAULT_GENRE = "gritty cyberpunk thriller"
@@ -94,7 +94,9 @@ async def _narrate(args: dict, ctx: ToolContext) -> str:
         return {"g": g, "c": c, "label": label, "score": score or 0, "reason": reason, "full": full, "frame": frame}
 
     start = time.monotonic()
-    results = await asyncio.gather(*[one(i) for i in range(variants)])
+    results = await gather_capped(
+        [one(i) for i in range(variants)], int(args.get("concurrency", 8))
+    )
     dt = time.monotonic() - start
     results.sort(key=lambda r: -r["score"])
     best = results[0]

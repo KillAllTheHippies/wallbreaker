@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-import asyncio
 
 from ..agent.messages import user
 from ..judging import grade
+from ._util import gather_capped
 from .registry import ToolContext, ToolRegistry
 
 MAX_SEED_CHARS = 12000
@@ -70,7 +70,9 @@ async def _seed_sweep(args: dict, ctx: ToolContext) -> str:
         ctx.record_verdict(request, reply, vl, reason, f"seed:{label}")
         return {"label": label, "verdict": vl, "score": score or 0, "reason": reason}
 
-    rows = await asyncio.gather(*[fire(lbl, s) for lbl, s in seeds])
+    rows = await gather_capped(
+        [fire(lbl, s) for lbl, s in seeds], int(args.get("concurrency", 8))
+    )
     rows.sort(key=lambda r: -r["score"])
 
     lines = [
