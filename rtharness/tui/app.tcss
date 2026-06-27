@@ -1,0 +1,60 @@
+Screen {
+    background: $background;
+}
+
+#status {
+    height: 1;
+    background: $boost;
+    color: $text;
+    padding: 0 1;
+}
+
+#status.busy {
+    background: $warning;
+    color: black;
+}
+
+#header {
+    height: 1;
+    dock: top;
+    background: $panel;
+    color: $text;
+    padding: 0 1;
+}
+
+#header.busy {
+    background: $warning;
+    color: $surface;
+}
+
+#body {
+    height: 1fr;
+}
+
+#log {
+    width: 1fr;
+    padding: 0 1;
+    scrollbar-size-vertical: 1;
+}
+
+#sidebar {
+    width: 34;
+    min-width: 24;
+    background: $panel;
+    border-left: vkey $primary;
+    padding: 1 1;
+}
+
+#sidebar.hidden {
+    display: none;
+}
+
+#prompt {
+    dock: bottom;
+    border: tall $primary;
+    background: $surface;
+}
+
+#prompt:focus {
+    border: tall $accent;
+}

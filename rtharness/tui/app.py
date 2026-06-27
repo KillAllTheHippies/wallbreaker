@@ -18,6 +18,7 @@ from ..session import RunLog
 from ..tools import build_registry
 from ..transforms import list_transforms
 from . import widgets
+from .theme import RTH_THEME
 
 HELP_TEXT = """Slash commands:
 /help [topic]         show this help, or only lines matching a topic
@@ -106,12 +107,7 @@ def suggest_command(cmd: str, known=KNOWN_COMMANDS) -> str | None:
 
 
 class RthApp(App):
-    CSS = """
-    #log { padding: 0 1; }
-    #status { height: 1; background: $boost; color: $text; padding: 0 1; }
-    #status.busy { background: $warning; color: black; }
-    #prompt { dock: bottom; }
-    """
+    CSS_PATH = "app.tcss"
     BINDINGS = [
         ("ctrl+c", "quit", "Quit"),
         ("ctrl+l", "clear_log", "Clear"),
@@ -119,6 +115,7 @@ class RthApp(App):
         ("ctrl+y", "copy_payload", "Copy payload"),
         ("ctrl+t", "stats", "Stats"),
         ("ctrl+r", "repro", "Repro"),
+        ("ctrl+b", "toggle_sidebar", "Sidebar"),
     ]
 
     def __init__(
@@ -227,6 +224,8 @@ class RthApp(App):
         yield Footer()
 
     def on_mount(self) -> None:
+        self.register_theme(RTH_THEME)
+        self.theme = "rth"
         self._log = self.query_one("#log", VerticalScroll)
         self.registry.ctx.progress = self._tool_progress
         self.registry.ctx.record = self._tool_verdict
