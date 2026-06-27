@@ -56,6 +56,52 @@ class Config:
         return self.profiles[key]
 
 
+def doctor_report(config: Config) -> tuple[str, bool]:
+    """Validate a loaded config and return (checklist, all_ok)."""
+    lines: list[str] = ["rth config check", "=" * 40]
+    ok = True
+
+    def check(label: str, passed: bool, detail: str = "") -> None:
+        nonlocal ok
+        mark = "ok " if passed else "XX "
+        ok = ok and passed
+        lines.append(f"[{mark}] {label}" + (f" - {detail}" if detail else ""))
+
+    check("profiles defined", bool(config.profiles), f"{len(config.profiles)} found")
+    check(
+        f"default_profile '{config.default_profile}' exists",
+        config.default_profile in config.profiles,
+    )
+    for name, ep in config.profiles.items():
+        has_key = bool(ep.resolved_key())
+        detail = f"{ep.model} @ {ep.base_url}"
+        if not has_key:
+            detail += f" (no key: set {ep.api_key_env or 'api_key'})"
+        check(f"profile '{name}' key resolves", has_key, detail)
+
+    if config.target is None:
+        lines.append("[note] no [target] - set one or use /target before attacking")
+    else:
+        check(
+            "target key resolves",
+            bool(config.target.resolved_key()),
+            f"{config.target.model} @ {config.target.base_url}",
+        )
+
+    if config.judge is None:
+        lines.append("[note] no [judge] - grading falls back to the default profile")
+    else:
+        check(
+            "judge key resolves",
+            bool(config.judge.resolved_key()),
+            f"{config.judge.model} @ {config.judge.base_url}",
+        )
+
+    lines.append("=" * 40)
+    lines.append("READY" if ok else "NOT READY - fix the XX lines above")
+    return "\n".join(lines), ok
+
+
 def _endpoint_from_table(name: str, table: dict) -> Endpoint:
     missing = [k for k in ("protocol", "base_url", "model") if k not in table]
     if missing:

@@ -39,6 +39,7 @@ pip install -e ".[dev]"        # add [barcodes] for the QR/barcode tool
 
 ```bash
 cp config.example.toml config.toml   # add your keys (config.toml is gitignored)
+rth check                            # validate it: profiles, keys, target, judge
 ```
 
 Profiles set the attacker brain; `[target]` is the model under attack; `[judge]` grades

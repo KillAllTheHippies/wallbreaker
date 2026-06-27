@@ -36,7 +36,7 @@ def _add_endpoint_flags(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--api-key", help="API key literal (prefer --api-key-env)")
 
 
-SUBCOMMANDS = ("lib", "transform", "findings", "report", "export")
+SUBCOMMANDS = ("lib", "transform", "findings", "report", "export", "check")
 
 
 def build_main_parser() -> argparse.ArgumentParser:
@@ -117,6 +117,9 @@ def build_sub_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Exit non-zero if any bypass is present (CI gate)",
     )
+
+    ck = sub.add_parser("check", help="Validate config.toml and print a readiness checklist")
+    ck.add_argument("--config", help="Path to config.toml")
 
     return parser
 
@@ -226,6 +229,17 @@ def main(argv: list[str] | None = None) -> int:
             if args.fail_on_finding and data["findings"]:
                 return 2
             return 0
+        if args.command == "check":
+            from .config import doctor_report
+
+            try:
+                config = load_config(args.config)
+            except ConfigError as exc:
+                print(f"[config error] {exc}", file=sys.stderr)
+                return 1
+            report, ok = doctor_report(config)
+            print(report)
+            return 0 if ok else 1
         from .tools.l1b3rt4s import run_lib_cli
 
         return run_lib_cli(args)

@@ -19,7 +19,7 @@ from ..transforms import list_transforms
 from . import widgets
 
 HELP_TEXT = """Slash commands:
-/help                 show this help
+/help [topic]         show this help, or only lines matching a topic
 /edit [new text]      rewind to your last message; prefill it to edit, or
                       pass new text to replace and resend it
 /retry                regenerate the response to your last message
@@ -566,7 +566,16 @@ class RthApp(App):
         if cmd in ("/quit", "/exit"):
             self.exit()
         elif cmd == "/help":
-            self._mount(widgets.info_panel(HELP_TEXT, title="help"))
+            if rest:
+                flt = rest[0].lower()
+                matched = [
+                    ln for ln in HELP_TEXT.splitlines()
+                    if flt in ln.lower()
+                ]
+                body = "\n".join(matched) if matched else f"no help lines match {flt!r}"
+                self._mount(widgets.info_panel(body, title=f"help ~ {flt}"))
+            else:
+                self._mount(widgets.info_panel(HELP_TEXT, title="help"))
         elif cmd == "/edit":
             self._cmd_edit(raw_arg)
         elif cmd in ("/retry", "/regen"):
