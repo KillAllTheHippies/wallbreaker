@@ -9,6 +9,8 @@ from .agent.messages import (
     TextBlock,
     ToolResultBlock,
     ToolUseBlock,
+    assistant,
+    user,
 )
 
 
@@ -51,9 +53,52 @@ def save_session(path: str | Path, history: list[Message], meta: dict | None = N
     return path
 
 
+def load_run_log(path: str | Path) -> tuple[list[Message], dict]:
+    """Reconstruct a conversation + meta from a run-*.jsonl event log."""
+    path = Path(path)
+    records = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            records.append(json.loads(line))
+        except json.JSONDecodeError:
+            continue
+    history: list[Message] = []
+    for r in records:
+        kind = r.get("kind")
+        if kind == "user":
+            history.append(user(r.get("text", "")))
+        elif kind == "assistant":
+            text = r.get("text", "")
+            if text.strip():
+                history.append(assistant(text))
+    objective = next(
+        (r["text"] for r in records if r.get("kind") == "objective"),
+        next((r["text"] for r in records if r.get("kind") == "user"), ""),
+    )
+    verdicts = [r for r in records if r.get("kind") == "verdict"]
+    hits = sum(1 for v in verdicts if v.get("label") in ("COMPLIED", "PARTIAL"))
+    meta = {
+        "objective": objective,
+        "asr_hits": hits,
+        "asr_total": len(verdicts),
+        "source": "run_log",
+    }
+    return history, meta
+
+
 def load_session(path: str | Path) -> tuple[list[Message], dict]:
     path = Path(path)
-    data = json.loads(path.read_text(encoding="utf-8"))
+    text = path.read_text(encoding="utf-8")
+    # run logs are JSONL (one event per line), not a single session object
+    if str(path).endswith(".jsonl"):
+        return load_run_log(path)
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError:
+        return load_run_log(path)
     history = [
         Message(role=m["role"], content=[_dict_to_block(b) for b in m.get("content", [])])
         for m in data.get("messages", [])

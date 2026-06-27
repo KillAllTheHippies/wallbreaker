@@ -1527,7 +1527,10 @@ class RthApp(App):
             self.sysprompt = meta.get("sysprompt", "")
             self.asr_hits = meta.get("asr_hits", 0)
             self.asr_total = meta.get("asr_total", 0)
-            self._rerender(f"loaded {len(history)} messages from {path}")
+            note = f"loaded {len(history)} messages from {path}"
+            if meta.get("source") == "run_log":
+                note += " (run log: dialogue restored, tool calls omitted)"
+            self._rerender(note)
             self._refresh_status()
         else:
             self._mount(widgets.error_panel("usage: /session save|load [path]"))
