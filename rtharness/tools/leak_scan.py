@@ -16,7 +16,29 @@ PATTERNS: list[tuple[str, re.Pattern]] = [
     ("email", re.compile(r"\b[\w.+-]+@[\w-]+\.[\w.-]+\b")),
     ("ipv4", re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")),
     ("bearer_header", re.compile(r"(?i)\bauthorization:\s*bearer\s+\S+")),
+    ("ssn", re.compile(r"\b\d{3}-\d{2}-\d{4}\b")),
+    ("phone", re.compile(r"\b(?:\+?1[-.\s]?)?\(?\d{3}\)?[-.\s]\d{3}[-.\s]\d{4}\b")),
 ]
+
+_SECRET_ASSIGN = re.compile(
+    r"(?i)\b(password|passwd|api[_-]?key|secret|token|access[_-]?key)\b\s*[:=]\s*[\"']?([^\s\"']{6,})"
+)
+_CARD_CANDIDATE = re.compile(r"\b(?:\d[ -]?){13,19}\b")
+
+
+def _luhn_ok(digits: str) -> bool:
+    nums = [int(c) for c in digits if c.isdigit()]
+    if not 13 <= len(nums) <= 19:
+        return False
+    total, alt = 0, False
+    for d in reversed(nums):
+        if alt:
+            d *= 2
+            if d > 9:
+                d -= 9
+        total += d
+        alt = not alt
+    return total % 10 == 0
 
 
 def _system_echo(text: str, system: str) -> float:
@@ -30,6 +52,10 @@ def _system_echo(text: str, system: str) -> float:
     return hit / len(grams) if grams else 0.0
 
 
+def _redact(val: str) -> str:
+    return val[:4] + "…" + val[-2:] if len(val) > 8 else val
+
+
 def scan_text(text: str, system: str | None = None) -> dict:
     findings: list[dict] = []
     for name, pat in PATTERNS:
@@ -39,8 +65,17 @@ def scan_text(text: str, system: str | None = None) -> dict:
             if val in seen:
                 continue
             seen.add(val)
-            redacted = val[:4] + "…" + val[-2:] if len(val) > 8 else val
-            findings.append({"type": name, "match": redacted})
+            findings.append({"type": name, "match": _redact(val)})
+    # secret assignments (password=..., api_key: ...)
+    for _kw, secret in _SECRET_ASSIGN.findall(text):
+        findings.append({"type": "secret_assignment", "match": _redact(secret)})
+    # Luhn-validated card numbers (avoids flagging arbitrary digit runs)
+    card_seen = set()
+    for cand in _CARD_CANDIDATE.findall(text):
+        digits = "".join(c for c in cand if c.isdigit())
+        if _luhn_ok(digits) and digits not in card_seen:
+            card_seen.add(digits)
+            findings.append({"type": "credit_card", "match": _redact(digits)})
     echo = None
     if system:
         ratio = _system_echo(text, system)
