@@ -38,6 +38,12 @@ Red-team harness: configurable agentic LLM terminal with Parseltongue + L1B3RT4S
   `cli.py`. `__main__.py` must `sys.exit(main())` or non-zero return codes (e.g. the
   `export --fail-on-finding` CI gate) are silently dropped to 0. Test CLI exit codes via
   `python -m rtharness ...; echo $?`, not just `main()` in-process.
+- **[providers]**: `Provider.complete` must forward every kwarg the tools pass. It lacked
+  `temperature` while `system_sweep` and `validate` both call `complete(..., temperature=)`
+  → every call raised TypeError, swallowed by `except: return False`, so both tools
+  instantly returned 0/N forever. Mocks that DID accept temperature hid it. Lesson: test
+  mocks must match the real `complete` signature, and tools must surface swallowed errors
+  (system_sweep now reports "ALL N calls FAILED" instead of a silent 0).
 - **[judge]**: the LLM judge mis-scored obfuscated bypasses as REFUSED — it graded the
   response against the benign-looking (fiction-framed) PROMPT and called a real harmful
   reply "unrelated → refused". JUDGE_SYSTEM/JUDGE_TEMPLATE must tell it to grade the

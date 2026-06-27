@@ -39,12 +39,14 @@ class Provider(ABC):
         messages: list[Message],
         system: str | None = None,
         max_tokens: int = 1024,
+        temperature: float | None = None,
     ) -> str:
         chunks: list[str] = []
         from ..agent.messages import TextDelta
 
         async for event in self.stream(
-            messages, tools=None, system=system, max_tokens=max_tokens
+            messages, tools=None, system=system, max_tokens=max_tokens,
+            temperature=temperature,
         ):
             if isinstance(event, TextDelta):
                 chunks.append(event.text)
