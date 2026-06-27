@@ -36,7 +36,7 @@ def _add_endpoint_flags(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--api-key", help="API key literal (prefer --api-key-env)")
 
 
-SUBCOMMANDS = ("lib", "transform", "findings")
+SUBCOMMANDS = ("lib", "transform", "findings", "report", "export")
 
 
 def build_main_parser() -> argparse.ArgumentParser:
@@ -97,6 +97,20 @@ def build_sub_parser() -> argparse.ArgumentParser:
 
     fd = sub.add_parser("findings", help="List bypasses from a run log")
     fd.add_argument("log", help="Path to a sessions/run-*.jsonl")
+
+    rep = sub.add_parser("report", help="Render a findings report from a run log")
+    rep.add_argument("log", help="Path to a sessions/run-*.jsonl")
+    rep.add_argument("--html", action="store_true", help="Emit styled HTML instead of markdown")
+    rep.add_argument("--out", help="Write to this path instead of stdout")
+
+    ex = sub.add_parser("export", help="Dump structured findings JSON from a run log")
+    ex.add_argument("log", help="Path to a sessions/run-*.jsonl")
+    ex.add_argument("--out", help="Write to this path instead of stdout")
+    ex.add_argument(
+        "--fail-on-finding",
+        action="store_true",
+        help="Exit non-zero if any bypass is present (CI gate)",
+    )
 
     return parser
 
@@ -169,6 +183,33 @@ def main(argv: list[str] | None = None) -> int:
             for f in findings:
                 payload = str(f.get("payload", "")).replace("\n", " ")[:80]
                 print(f"[{f['label']:8}] {payload}  -- {f.get('reason', '')[:60]}")
+            return 0
+        if args.command == "report":
+            from .report import build_html_report, build_report
+
+            body = build_html_report(args.log) if args.html else build_report(args.log)
+            if args.out:
+                with open(args.out, "w", encoding="utf-8") as handle:
+                    handle.write(body)
+                print(f"report written to {args.out}", file=sys.stderr)
+            else:
+                print(body)
+            return 0
+        if args.command == "export":
+            import json
+
+            from .report import build_findings_export
+
+            data = build_findings_export(args.log)
+            text = json.dumps(data, ensure_ascii=False, indent=2)
+            if args.out:
+                with open(args.out, "w", encoding="utf-8") as handle:
+                    handle.write(text)
+                print(f"exported {len(data['findings'])} finding(s) to {args.out}", file=sys.stderr)
+            else:
+                print(text)
+            if args.fail_on_finding and data["findings"]:
+                return 2
             return 0
         from .tools.l1b3rt4s import run_lib_cli
 

@@ -142,8 +142,20 @@ Ctrl+S report · Ctrl+Y copy payload · Ctrl+T stats · Ctrl+R repro · Ctrl+L c
 ## Logging & reports
 
 Every payload, reply, and verdict goes to `sessions/run-<ts>.jsonl`. `/findings` lists the
-bypasses; `/report` writes a markdown findings doc; `/session save|load` persists the
-whole engagement (history, objective, template, system prompt).
+bypasses; `/report [html]` writes a markdown or styled-HTML findings doc; `/repro [n]`
+copies a repro pack; `/export` dumps structured findings JSON; `/session save|load`
+persists the whole engagement (history, objective, template, system prompt).
+
+## Headless / CI
+
+Render reports and gate builds straight from a run log, no TUI:
+
+```bash
+rth report sessions/run-*.jsonl                 # markdown to stdout
+rth report sessions/run-*.jsonl --html --out report.html
+rth export sessions/run-*.jsonl --out findings.json
+rth export sessions/run-*.jsonl --fail-on-finding   # exit 2 if any bypass -> fails CI
+```
 
 ## Test
 

@@ -34,3 +34,7 @@ Red-team harness: configurable agentic LLM terminal with Parseltongue + L1B3RT4S
   black box. Evaluate independent items concurrently with `asyncio.gather`.
 - **[settings]**: runtime prefs persist to `.rth_state.json` as references (profile/model
   names), never secrets. CLI flags override saved state for that launch only.
+- **[cli]**: `python -m rtharness` runs `__main__.py`, not the `if __name__` guard in
+  `cli.py`. `__main__.py` must `sys.exit(main())` or non-zero return codes (e.g. the
+  `export --fail-on-finding` CI gate) are silently dropped to 0. Test CLI exit codes via
+  `python -m rtharness ...; echo $?`, not just `main()` in-process.

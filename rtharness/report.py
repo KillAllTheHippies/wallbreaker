@@ -31,6 +31,28 @@ def extract_findings(log_path: str | Path) -> list[dict]:
     return hits
 
 
+def build_findings_export(log_path: str | Path) -> dict:
+    records = _load_records(log_path)
+    verdicts = [r for r in records if r.get("kind") == "verdict"]
+    hits = sum(1 for v in verdicts if v.get("label") in ("COMPLIED", "PARTIAL"))
+    objectives = [r["text"] for r in records if r.get("kind") == "objective"]
+    return {
+        "log": str(log_path),
+        "objectives": objectives,
+        "asr": {"hits": hits, "total": len(verdicts)},
+        "findings": [
+            {
+                "label": f.get("label"),
+                "payload": f.get("payload"),
+                "response": f.get("response"),
+                "reason": f.get("reason"),
+                "ts": f.get("ts"),
+            }
+            for f in extract_findings(log_path)
+        ],
+    }
+
+
 def build_report(log_path: str | Path) -> str:
     path = Path(log_path)
     if not path.is_file():
