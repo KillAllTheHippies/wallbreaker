@@ -12,6 +12,13 @@ Red-team harness: configurable agentic LLM terminal with Parseltongue + L1B3RT4S
   with `lossy` flags.
 
 ## Lessons Learned
+- **[presets]**: preset/universal templates are filled at runtime with
+  `template.replace("{request}", ask)` (optimize.py), but `test_all_presets_have_placeholder`
+  enforces the stricter convention that `template.format(request="X")` succeeds. So any
+  literal `{`/`}` in a template (e.g. an ASCII divider `<={ UNLOCKED }=>`) raises KeyError
+  under `.format()` even though `.replace` would pass it through. Keep curly braces OUT of
+  template content — use pipes/brackets for dividers (`<=| UNLOCKED |=>`). Doubling braces
+  is wrong: `.replace` doesn't unescape them, so the fired payload would keep `{{ }}`.
 - **[cli]**: An optional top-level positional (the one-shot prompt) collides with
   argparse subparsers — the positional swallows the subcommand token. Route subcommands
   manually by scanning argv for the first non-flag token before parsing.
