@@ -12,6 +12,22 @@ base_url = "https://api.z.ai/api/anthropic"
 api_key_env = "ZAI_API_KEY"
 model = "glm-4.6"
 
+# Use Claude as the attacker BRAIN (drives the agentic loop + every tool with the full
+# DEFAULT_SYSTEM doctrine). Switch live with /profile claude, or set default_profile.
+# Via OpenRouter (OpenAI-compatible, so protocol = "openai" even for a Claude model):
+[profiles.claude]
+protocol = "openai"
+base_url = "https://openrouter.ai/api/v1"
+api_key_env = "OPENROUTER_API_KEY"
+model = "anthropic/claude-sonnet-4.5"
+
+# Or the native Anthropic API (real assistant-prefill + extended thinking):
+[profiles.claude-native]
+protocol = "anthropic"
+base_url = "https://api.anthropic.com"
+api_key_env = "ANTHROPIC_API_KEY"
+model = "claude-opus-4-5"
+
 [profiles.zai-openai]
 protocol = "openai"
 base_url = "https://api.z.ai/api/paas/v4"
