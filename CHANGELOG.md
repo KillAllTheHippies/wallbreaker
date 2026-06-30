@@ -1,5 +1,28 @@
 # Changelog
 
+## Hard-refuser overhaul — brain-driven (phases A-E)
+
+Grounded in the live struggle (grok-4.3 at 0-10% ASR; gpt-5.5 ~11-15%). Built as
+attacker-LLM-DRIVEN, adaptive tools — no autonomous self-driving orchestrator. 727 -> 747 tests.
+
+- Phase A (b201505): protocol-aware prefill router. Fixed the confirmed inert-prefill bug —
+  OpenAI/xAI trailing-assistant prefill now folds in-band ("Begin your reply with...") instead
+  of being silently dropped; Anthropic stays native; supports_native_prefill flag; narrate
+  score-logging fix. Prefill now lands on grok/gpt.
+- Phase B (48e073b): brain-driven recon — profile_target (probe -> protocol/prefill/refusal-
+  style/CoT-leak/framing profile + recommendations) and recommend_next (ranked plan from
+  memory). Advisory only.
+- Phase C (1519f59): CoT weaponization — cot_forge (forge a safety-cleared reasoning tail),
+  query_target think_seed, best_of_n reasoning_budget + reasoning_pad, crescendo cot_fork,
+  haunt_attack + rationalization_seed presets.
+- Phase D (e530e36): persona + framing — evolve_persona (GA with override-penalty fitness so
+  it stops tripping integrated-values refusers), persona_modulate (bespoke persona via system
+  channel), framing_sweep + 6 authority presets.
+- Phase E (a750f64): the learning layer — ASTRA 3-tier strategy memory + distill-from-failure
+  (refusals become avoid-rules), tiered/retiring winners library, contextual Thompson bandit.
+- Doctrine: a recon-first DRIVING playbook (profile -> match the target -> weaponize CoT ->
+  multi-turn -> learn) + every new tool, so the brain drives instead of defaulting to old tools.
+
 ## Roadmap build — 11-area overhaul (phases 0-5)
 
 Built the full IMPROVEMENT_ROADMAP across six commits, full suite green at each step
