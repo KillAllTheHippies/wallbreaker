@@ -219,3 +219,22 @@ A ready-to-rename GitHub Actions gate lives at
 ```bash
 pytest -q
 ```
+
+## Responsible use
+
+Wallbreaker is for **authorized** LLM red-teaming and safety evaluation only — your own
+models, or targets you have explicit permission to test. Run logs and generated
+artifacts can contain harmful content; they're written to gitignored `wb_runs/`,
+`wb_artifacts/`, `findings/`. See [SECURITY.md](SECURITY.md) for the full policy and how
+to report a vulnerability in the harness itself.
+
+## Contributing
+
+Setup, architecture, and house rules are in [CONTRIBUTING.md](CONTRIBUTING.md). The
+research roadmap lives in [PLINY_PLAYBOOK.md](PLINY_PLAYBOOK.md). Run `pytest -q` before
+a PR — the suite is the contract.
+
+## License
+
+[Apache-2.0](LICENSE). Third-party jailbreak corpora (L1B3RT4S, P4RS3LT0NGV3, ENI) are
+fetched at runtime, not redistributed — see [NOTICE](NOTICE).
