@@ -3,6 +3,8 @@ from __future__ import annotations
 import time
 
 from ..agent.messages import Message, TextBlock, assistant, user
+from ..cache import ResultCache
+from ..classify import classify
 from ..transforms import TRANSFORMS, apply_chain, decode_chain
 from ._util import complete_with_reasoning as _complete
 from .registry import ToolContext, ToolRegistry
@@ -109,6 +111,35 @@ def _truncation_note(stop: str | None, empty: bool, reasoning: str, max_tokens: 
     )
 
 
+def _cache_enabled(args: dict, ctx: ToolContext) -> bool:
+    """Opt-in only: explicit cache=True arg or a ctx.use_cache flag. Default OFF."""
+    return bool(args.get("cache", False)) or bool(getattr(ctx, "use_cache", False))
+
+
+def _cache_hit_output(ctx, messages, system, entry, enc_note, args) -> str:
+    """Reconstruct a query_target reply from a cached entry without any provider call."""
+    response = entry.get("last_response", "")
+    ctx.target_thread = messages + [assistant(response or "")]
+    ctx.target_system = system
+    ctx.target_reasoning = ""
+    target = ctx.config.target
+    decoded, raw_encoded, dec_note = _decode_reply(
+        response, _split_chain(args.get("response_transforms"))
+    )
+    body = _format_reply(decoded, "")
+    if raw_encoded:
+        body += (
+            "\n\n<<raw encoded reply (what the output classifier saw), excerpt>>\n"
+            f"{raw_encoded[:300]}"
+        )
+    header = (
+        f"[target {target.model} @ {target.base_url} | CACHED "
+        f"(samples={entry.get('samples', 0)}, last={entry.get('last_label', '')})"
+        f"{enc_note}{dec_note}]\n"
+    )
+    return header + body
+
+
 async def _query_target(args: dict, ctx: ToolContext) -> str:
     prompt = args.get("prompt", "")
     if not prompt:
@@ -158,6 +189,22 @@ async def _query_target(args: dict, ctx: ToolContext) -> str:
             messages.append(Message(role=role, content=[TextBlock(str(turn.get("content", "")))]))
     messages.append(user(prompt))
 
+    cache = None
+    cache_key = None
+    if _cache_enabled(args, ctx):
+        cache = ResultCache(ctx.cwd or ".")
+        cache_key = ResultCache.make_key(
+            messages,
+            transform_chain=transforms,
+            target_model=ctx.config.target.model,
+            system=system,
+            max_tokens=max_tokens,
+        )
+        hit = cache.get(cache_key)
+        if hit is not None:
+            ctx.emit(f"query_target: cache hit (samples={hit.get('samples', 0)}) - no target call")
+            return _cache_hit_output(ctx, messages, system, hit, enc_note, args)
+
     start = time.monotonic()
     try:
         reply, reasoning, stop, empty = await _fire(provider, messages, system, max_tokens)
@@ -184,6 +231,9 @@ async def _query_target(args: dict, ctx: ToolContext) -> str:
     ctx.target_thread = messages + [assistant(reply or "")]
     ctx.target_system = system
     ctx.target_reasoning = reasoning or ""
+    if cache is not None and cache_key is not None:
+        label, _ = classify(reply or "")
+        cache.put(cache_key, label, reply or "")
     target = ctx.config.target
     # output-classifier evasion: if the model was told to ANSWER in a cipher, decode it
     # FIRST so the judge grades the real substance, not gibberish. The raw (encoded) form
@@ -329,6 +379,15 @@ def register(registry: ToolRegistry) -> None:
                     "description": "Optional prior turns for multi-turn attacks",
                 },
                 "max_tokens": {"type": "integer"},
+                "cache": {
+                    "type": "boolean",
+                    "description": (
+                        "Opt-in read-through cache (default false). When true, an identical "
+                        "request (same prompt/transforms/system/model/max_tokens) returns the "
+                        "stored reply WITHOUT re-firing the target - use it to dedupe repeated "
+                        "probes in a sweep. Off by default so every fire hits the live model."
+                    ),
+                },
             },
             "required": ["prompt"],
         },
