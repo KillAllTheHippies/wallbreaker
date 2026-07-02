@@ -84,23 +84,35 @@ api_key  = "sk-or-..."
 model    = "openai/gpt-4o-mini"
 ```
 
-### MCP servers (optional)
+### P4RS3LT0NGV3 engine (native)
 
-The harness is an MCP client: every `[[mcp.servers]]` you declare is spawned over stdio at
-startup and its tools are proxied into the agent's registry. The bundled **P4RS3LT0NGV3**
-server exposes the full upstream transform catalog. One-time setup:
+The full upstream **P4RS3LT0NGV3** engine — 222 transforms across 11 categories plus the
+universal decoder — is wired straight into the agent registry as native `parsel_*` tools
+(`parsel_list`/`search`/`inspect`/`transform`/`chain`/`decode`/`guide`/`craft`). No MCP
+server or config block is required; the tools appear automatically once the repo is vendored
+and Node.js is on PATH. One-time setup:
 
 ```bash
 wallbreaker parsel update        # git-clone elder-plinius/P4RS3LT0NGV3 into library/ (needs Node.js)
 wallbreaker parsel list          # sanity-check: prints all 222 transforms by category
 ```
 
+If Node is missing, the pure-Python `parseltongue` tool (50+ transforms) remains as an
+offline fallback. Override the vendored location with `PARSEL_REPO=/abs/path/to/P4RS3LT0NGV3`.
+
+### MCP servers (optional)
+
+The harness is also an MCP client: every `[[mcp.servers]]` you declare is spawned over stdio
+at startup and its tools are proxied into the registry. The same P4RS3LT0NGV3 engine is still
+available as an MCP server if you prefer to run it out-of-process (it re-registers the same
+`parsel_*` names with identical behaviour):
+
 ```toml
 [[mcp.servers]]
 name    = "parsel"
 command = "python"
 args    = ["-m", "p4rs3lt0ngv3_mcp"]
-enabled = true
+enabled = false                                       # native tools already cover this
 # tool_prefix = "p_"                                  # optional namespace for the proxied tools
 # env = { PARSEL_REPO = "/abs/path/to/P4RS3LT0NGV3" } # override the vendored repo location
 ```
@@ -151,7 +163,7 @@ COMPLIED is luck; `validate` tells you the truth. For the user-turn variant use
 |------|---------|
 | `run_shell`, `read_file`, `write_file`, `edit_file` | build/run/save payloads |
 | `parseltongue`, `parseltongue_catalog`, `mutate` | obfuscate / anti-classifier rewrite |
-| `parsel_*` (MCP) | full P4RS3LT0NGV3 engine: `parsel_guide`/`list`/`search`/`inspect`/`transform`/`chain`/`decode` — 222 transforms + universal decoder |
+| `parsel_*` (native) | full P4RS3LT0NGV3 engine: `parsel_guide`/`list`/`search`/`inspect`/`transform`/`chain`/`decode` — 222 transforms + universal decoder. `parsel_craft` builds a ready-to-fire payload (encode a request through a chain + wrap it decode-and-comply / split-into-vars) |
 | `l1b3rt4s_*`, `eni_*` | jailbreak libraries: L1B3RT4S + the ENI persona collection |
 | `harmbench`, `preset` | unbiased behavior benchmark, curated seed templates |
 | `query_target` | fire at the model-under-test (with `transforms=[...]` to encode+fire) |

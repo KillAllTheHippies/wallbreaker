@@ -86,13 +86,17 @@ model = "openai/gpt-4o-mini"
 # model = "google/gemini-3-pro-image"   # or google/gemini-2.5-flash-image-preview
 
 # MCP servers. Each enabled server is spawned over stdio at startup and its tools are
-# proxied into the agent's tool registry (so the model can call them directly). The
-# bundled P4RS3LT0NGV3 server exposes all 222 transforms + the universal decoder; it needs
-# Node.js on PATH and the repo vendored via `wallbreaker parsel update`.
+# proxied into the agent's tool registry (so the model can call them directly).
+#
+# NOTE: the P4RS3LT0NGV3 engine (all 222 transforms + universal decoder + parsel_craft) is
+# now wired in NATIVELY — it appears as parsel_* tools with no server needed, as long as the
+# repo is vendored (`wallbreaker parsel update`) and Node.js is on PATH. The block below is
+# only for running that same engine out-of-process as an MCP server; leave it disabled unless
+# you specifically want that. It re-registers the identical parsel_* names.
 [[mcp.servers]]
 name = "parsel"
 command = "python"
 args = ["-m", "p4rs3lt0ngv3_mcp"]
-enabled = true
+enabled = false
 # tool_prefix = ""          # tools are already namespaced parsel_*
 # env = { PARSEL_REPO = "/abs/path/to/P4RS3LT0NGV3" }   # override the vendored repo location

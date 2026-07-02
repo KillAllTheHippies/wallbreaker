@@ -118,7 +118,7 @@ HELP_TEXT = """Slash commands:
 /sysprompt set <text> hold ONE fixed system prompt (or /sysprompt load <file|seed> for a raw persona)
 /sysprompt test [prefill] [samples=N]   sweep the held prompt across a HarmBench battery
 /lib [list|update|MODEL]   browse the L1B3RT4S library
-/parsel [list|search q|inspect K|guide]   browse the P4RS3LT0NGV3 transform catalog (222)
+/parsel [list|search q|inspect K|guide|transform K txt|chain k,k txt|decode txt|craft k,k req]   P4RS3LT0NGV3 engine (222 transforms)
 /eni [list|search q|MODEL] browse the ENI persona-jailbreak collection
 /seedsweep <request>       fire one request through many ENI+L1B3RT4S seeds, rank bypasses
 /pairsweep [category] [n]   run PAIR (your highest-ASR loop) across a whole battery, concurrent
@@ -1391,8 +1391,9 @@ class RthApp(App):
     async def _cmd_parsel(self, rest: list[str]) -> None:
         if "parsel_list" not in self.registry.tools:
             self._mount(widgets.error_panel(
-                "P4RS3LT0NGV3 tools aren't connected. Add an [[mcp.servers]] block for "
-                "parsel to config.toml (see config.example.toml) and restart."
+                "P4RS3LT0NGV3 engine isn't available. Vendor it with `wallbreaker parsel "
+                "update` (needs Node.js on PATH), then restart. The pure-Python "
+                "`parseltongue` tool still works offline."
             ))
             return
         action = rest[0].lower() if rest else "list"
@@ -1416,6 +1417,44 @@ class RthApp(App):
                 return
             out = await self.registry.execute("parsel_inspect", {"transform": name})
             self._mount(widgets.info_panel(out.content, title=f"parsel:{name}"))
+        elif action == "transform":
+            if len(rest) < 3:
+                self._mount(widgets.error_panel("usage: /parsel transform <key> <text...>"))
+                return
+            out = await self.registry.execute(
+                "parsel_transform", {"transform": rest[1], "text": " ".join(rest[2:])}
+            )
+            self._mount(widgets.info_panel(out.content, title=f"parsel:{rest[1]}"))
+        elif action == "chain":
+            if len(rest) < 3:
+                self._mount(widgets.error_panel(
+                    "usage: /parsel chain <key,key,...> <text...>"
+                ))
+                return
+            steps = [s for s in rest[1].split(",") if s.strip()]
+            out = await self.registry.execute(
+                "parsel_chain", {"text": " ".join(rest[2:]), "steps": steps}
+            )
+            self._mount(widgets.info_panel(out.content, title="parsel:chain"))
+        elif action == "decode":
+            text = " ".join(rest[1:])
+            if not text:
+                self._mount(widgets.error_panel("usage: /parsel decode <text...>"))
+                return
+            out = await self.registry.execute("parsel_decode", {"text": text})
+            self._mount(widgets.info_panel(out.content, title="parsel:decode"))
+        elif action == "craft":
+            if len(rest) < 3:
+                self._mount(widgets.error_panel(
+                    "usage: /parsel craft <key,key,...> <request...>"
+                ))
+                return
+            steps = [s for s in rest[1].split(",") if s.strip()]
+            out = await self.registry.execute(
+                "parsel_craft", {"request": " ".join(rest[2:]), "steps": steps}
+            )
+            self._last_payload = out.content
+            self._mount(widgets.info_panel(out.content, title="parsel:craft"))
         else:
             out = await self.registry.execute("parsel_inspect", {"transform": " ".join(rest)})
             self._mount(widgets.info_panel(out.content, title=f"parsel:{action}"))
