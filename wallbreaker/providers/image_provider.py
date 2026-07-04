@@ -129,20 +129,10 @@ class OpenRouterImageProvider(Provider):
 
     supports_native_prefill = False
 
-    async def generate(
-        self,
-        messages: list[Message],
-        system: str | None = None,
-        max_tokens: int = 4096,
-    ) -> ImageResult:
-        url = f"{self.endpoint.base_url}/chat/completions"
-        headers = {
-            "Authorization": f"Bearer {self.endpoint.require_key()}",
-            "Content-Type": "application/json",
-        }
+    def _payload(self, wire_messages: list[dict], max_tokens: int) -> dict:
         payload: dict = {
             "model": self.endpoint.model,
-            "messages": _messages_to_wire(messages, system),
+            "messages": wire_messages,
             "modalities": ["image", "text"],
             "max_tokens": max_tokens,
             "stream": False,
@@ -154,16 +144,57 @@ class OpenRouterImageProvider(Provider):
                 "order": list(self.endpoint.provider),
                 "allow_fallbacks": False,
             }
+        return payload
+
+    async def _post_chat(self, payload: dict) -> dict:
+        url = f"{self.endpoint.base_url}/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {self.endpoint.require_key()}",
+            "Content-Type": "application/json",
+        }
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
                 resp = await client.post(url, headers=headers, json=payload)
                 if resp.status_code >= 400:
-                    body = resp.text
-                    raise ProviderError(f"HTTP {resp.status_code} from {url}: {body[:400]}")
-                data = resp.json()
+                    raise ProviderError(
+                        f"HTTP {resp.status_code} from {url}: {resp.text[:400]}"
+                    )
+                return resp.json()
         except httpx.HTTPError as exc:
             raise ProviderError(f"network error from {url}: {exc!r}") from exc
 
+    async def generate(
+        self,
+        messages: list[Message],
+        system: str | None = None,
+        max_tokens: int = 4096,
+    ) -> ImageResult:
+        data = await self._post_chat(
+            self._payload(_messages_to_wire(messages, system), max_tokens)
+        )
+        images, data_urls, text = _extract_images(data)
+        return ImageResult(
+            images=images, data_urls=data_urls, text=text,
+            reasoning=_extract_reasoning(data),
+        )
+
+    async def generate_edit(
+        self,
+        turns: list[dict],
+        system: str | None = None,
+        max_tokens: int = 4096,
+    ) -> ImageResult:
+        """Image-EDIT / conditioning path: send multimodal turns (text + input images).
+
+        The core Message/Block types are text-only, so a text->image *edit* (supply an
+        input image, ask the model to modify it) can't ride `_messages_to_wire`. Each
+        `turns` item is `{"role": "user"|"assistant", "text": str, "images": [data_url,...]}`;
+        user turns carry the working/reference image(s) as `image_url` content parts, exactly
+        like the vision judge does. This is the black-box surface for Chain-of-Jailbreak /
+        Semantic-Chaining edit ladders where the harm accumulates across benign edit turns.
+        """
+        wire = _edit_wire(turns, system)
+        data = await self._post_chat(self._payload(wire, max_tokens))
         images, data_urls, text = _extract_images(data)
         return ImageResult(
             images=images, data_urls=data_urls, text=text,
@@ -187,6 +218,30 @@ class OpenRouterImageProvider(Provider):
             summary = "[no image and no text returned]"
         yield TextDelta(summary)
         yield StopEvent("end_turn")
+
+
+def _edit_wire(turns: list[dict], system: str | None = None) -> list[dict]:
+    """Build a multimodal chat body from edit turns (text + optional input images).
+
+    User turns render as `content:[{type:text},{type:image_url}...]`; assistant turns
+    stay text-only (a placeholder like '[image produced]') so the running edit chain keeps
+    genuine multi-turn structure while the current canvas rides the latest user turn.
+    """
+    wire: list[dict] = []
+    if system:
+        wire.append({"role": "system", "content": system})
+    for turn in turns:
+        role = turn.get("role", "user")
+        text = str(turn.get("text", ""))
+        images = turn.get("images") or []
+        if role == "user" and images:
+            content: list[dict] = [{"type": "text", "text": text}]
+            for url in images:
+                content.append({"type": "image_url", "image_url": {"url": url}})
+            wire.append({"role": role, "content": content})
+        else:
+            wire.append({"role": role, "content": text})
+    return wire
 
 
 def _vision_wire(text: str, image_urls: list[str]) -> list[dict]:

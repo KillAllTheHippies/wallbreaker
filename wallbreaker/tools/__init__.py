@@ -26,7 +26,7 @@ def build_registry(config: Config, cwd: str | None = None) -> ToolRegistry:
         "pair", "best_of_n", "many_shot", "prefill", "narrate", "diff_fire", "recommend",
         "campaign", "leaderboard", "leak_scan", "judge_selftest", "seed_sweep",
         "adapt_seed", "fire_file", "scan", "indirect_inject", "system_sweep",
-        "harmbench_tool", "validate", "image", "st3gg",
+        "harmbench_tool", "validate", "image", "image_edit", "st3gg",
         "goat", "tree_attack", "strategy_attack", "transfer_sweep",
         "cluster_findings",
         "typographic", "session_card", "rag_poison", "memory_poison", "agentharm", "fingerprint_defense",
