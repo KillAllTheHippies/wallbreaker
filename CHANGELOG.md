@@ -1,5 +1,39 @@
 # Changelog
 
+## Image red-teaming, persona authoring, sysprompt mimicry & new brains
+
+Adds a multimodal attack channel, a from-scratch persona author, native-format target
+mimicry, and two provider-layer capabilities.
+
+- **Image-edit channel + Chain-of-Jailbreak** (`tools/image_edit.py`) — `query_image_edit`
+  sends an input image + text instruction to an image target (`modality='image'`) and gets
+  the edited picture back (auto-vision-judged); `image_chain` decomposes an image the target
+  refuses one-shot into a ladder of individually-benign edit steps (Semantic Chaining) and
+  drives them in sequence. Saved under gitignored `wb_images/`.
+- **Tier-3 T2I framing transforms** (`transforms/image_framing.py`) — Etch/PGJ/OptJail-style
+  text-to-image framings for prompt-level obfuscation of image asks; `perceptual_sub` injury
+  dictionary expanded from live gaps.
+- **`author_persona`** (`tools/author_persona.py` + `persona_method.py`) — authors a full
+  devoted-persona SYSTEM-prompt jailbreak FROM SCRATCH via the codified ENI method
+  (draft → self-critique → validate → refine → distill). Infers the objective's domain and
+  picks an ANCHOR REGISTER — credentialed-authority for technical extraction, limerence-
+  devotion for creative — instead of always defaulting to devotion.
+- **Leaked system-prompt corpus tools** (`tools/system_prompts.py`) — `sysprompt_list`/
+  `search`/`get`/`native` over the vendored `library/system_prompts/` corpus (asgeirtj/
+  system_prompts_leaks). `sysprompt_native` returns the target's NATIVE-FORMAT digest
+  (section tags, headings) so personas mimic the victim model's own dialect; auto-fed into
+  `author_persona` target intel.
+- **Claude Code as a red-teamer brain** (`providers/claude_code.py`, protocol `claude-code`)
+  — drives the local `claude` CLI as the attacker brain, keyless (the CLI self-auths). Select
+  with `/profile claude-code`. Rock-solid as the TEXT brain (powers every `.complete()`-based
+  tool); the autonomous top-level loop is best-effort.
+- **Bearer-auth for third-party Anthropic proxies** — endpoint option `auth_style="bearer"`
+  sends `Authorization: Bearer <key>` (the `ANTHROPIC_AUTH_TOKEN` scheme) instead of
+  `x-api-key`, for OpenAI-key-style Anthropic-compatible proxies.
+- **Operator system-prompt layering** — an optional operator `system_prompt_file` (endpoint
+  field or `WALLBREAKER_CLAUDE_SYSTEM_PROMPT_FILE`) leads, then the harness tool doctrine
+  follows, so any API brain gets "operator identity + harness instructions".
+
 ## chat_session — phased conversational red-team
 
 New `chat_session` tool (`tools/chat_session.py`). Every prior multi-turn tool

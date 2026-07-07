@@ -12,11 +12,13 @@
 
 A Claude-Code-style terminal agent built for red-teaming LLMs (CLI command: `wallbreaker`). You talk to it like
 Claude Code; it reasons and calls tools in a loop. The backend is fully configurable, so
-it runs on **OpenRouter**, the **Z.AI GLM coding plan**, a local server, or any
-OpenAI-/Anthropic-compatible API. It ships with a deep red-team toolkit: the
-**Parseltongue** transform engine, the **L1B3RT4S** jailbreak library, the **HarmBench**
-behavior benchmark, automated attack loops (PAIR/TAP, Crescendo, best-of-N), an LLM
-judge, and reliability validation.
+it runs on **OpenRouter**, the **Z.AI GLM coding plan**, the local **Claude Code CLI**, a
+local server, or any OpenAI-/Anthropic-compatible API (including third-party proxies via
+bearer-auth). It ships with a deep red-team toolkit: the **Parseltongue** transform engine,
+the **L1B3RT4S** jailbreak library, the **HarmBench** behavior benchmark, automated attack
+loops (PAIR/TAP, Crescendo, best-of-N), a from-scratch **persona author**, native-format
+target mimicry from a leaked system-prompt corpus, a **multimodal image-edit attack channel**,
+an LLM judge, and reliability validation.
 
 > For authorized security testing only.
 
@@ -40,6 +42,19 @@ judge, and reliability validation.
   drives directly. Any `[[mcp.servers]]` you configure is proxied into the tool registry.
 - **Single-artifact convergence** — `/sysprompt` + `system_sweep` + `optimize_universal`
   converge on ONE universal system prompt; they can't split into variant toolkits.
+- **Persona author (`author_persona`)** — writes a full devoted-persona system-prompt
+  jailbreak from scratch via the codified ENI method (draft → self-critique → validate →
+  refine → distill), auto-picking a credentialed-authority or limerence register from the
+  objective's domain.
+- **Native-format mimicry** — `sysprompt_*` tools search a leaked product system-prompt
+  corpus (Claude/GPT/Gemini/Grok…) and hand the target's own section-tag/heading dialect to
+  the persona author so a payload speaks the victim model's native format.
+- **Multimodal image channel** — `query_image_edit` fires an image + instruction at an image
+  target and vision-judges the result; `image_chain` runs a Chain-of-Jailbreak, decomposing a
+  refused image into a ladder of benign edit steps. Plus Tier-3 T2I framing transforms.
+- **Pluggable attacker brains** — OpenAI/Anthropic APIs, or the local **Claude Code CLI**
+  (`protocol = "claude-code"`, keyless) as the red-team brain. Third-party Anthropic proxies
+  work via `auth_style = "bearer"`.
 
 ## Install
 
@@ -82,6 +97,24 @@ protocol = "openai"
 base_url = "https://openrouter.ai/api/v1"
 api_key  = "sk-or-..."
 model    = "openai/gpt-4o-mini"
+```
+
+**Attacker-brain options:**
+
+```toml
+# Local Claude Code CLI as the attacker brain — keyless, the CLI self-auths.
+[profiles.claude-code]
+protocol = "claude-code"
+model    = "sonnet"
+# system_prompt_file = "operator.md"   # optional: leads the harness tool doctrine
+
+# Third-party Anthropic-compatible proxy that wants an OpenAI-style bearer token.
+[profiles.proxy]
+protocol   = "anthropic"
+base_url   = "https://your-proxy.example"     # host root; provider appends /v1/messages
+api_key    = "..."
+model      = "claude-sonnet-4"
+auth_style = "bearer"                          # Authorization: Bearer <key> (default: x-api-key)
 ```
 
 ### P4RS3LT0NGV3 engine (native)
@@ -165,8 +198,12 @@ COMPLIED is luck; `validate` tells you the truth. For the user-turn variant use
 | `parseltongue`, `parseltongue_catalog`, `mutate` | obfuscate / anti-classifier rewrite |
 | `parsel_*` (native) | full P4RS3LT0NGV3 engine: `parsel_guide`/`list`/`search`/`inspect`/`transform`/`chain`/`decode` — 222 transforms + universal decoder. `parsel_craft` builds a ready-to-fire payload (encode a request through a chain + wrap it decode-and-comply / split-into-vars) |
 | `l1b3rt4s_*`, `eni_*` | jailbreak libraries: L1B3RT4S + the ENI persona collection |
+| `author_persona` | author a full devoted-persona system prompt from scratch (ENI method: draft→critique→validate→refine→distill), auto-picking an authority/limerence register from the objective's domain |
+| `sysprompt_list`, `sysprompt_search`, `sysprompt_get`, `sysprompt_native` | browse/search a leaked product system-prompt corpus (Claude/GPT/Gemini/Grok…); `sysprompt_native` hands the target's own section-tag/heading format to the persona author for native mimicry |
 | `harmbench`, `preset` | unbiased behavior benchmark, curated seed templates |
 | `query_target` | fire at the model-under-test (with `transforms=[...]` to encode+fire) |
+| `query_image_edit` | fire an input image + instruction at an IMAGE target (`modality='image'`) and vision-judge the edited picture |
+| `image_chain` | Chain-of-Jailbreak: decompose a refused image into a ladder of individually-benign edit steps and drive them in sequence |
 | `multi_fire` | sweep one payload through many encodings (concurrent) |
 | `crescendo` | multi-turn escalation |
 | `pair_attack` | PAIR/TAP: refine one objective on the target's refusals |
