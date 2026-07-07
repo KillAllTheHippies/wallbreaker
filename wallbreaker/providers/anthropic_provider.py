@@ -70,6 +70,21 @@ def _messages_to_wire(messages: list[Message], merge_system: str | None = None) 
 class AnthropicProvider(Provider):
     supports_native_prefill = True
 
+    def _auth_headers(self) -> dict:
+        """Request headers. Native Anthropic authenticates with x-api-key; third-party
+        proxies (tokies.cc, etc.) use Authorization: Bearer (the ANTHROPIC_AUTH_TOKEN
+        scheme). endpoint.auth_style='bearer' selects the latter."""
+        headers = {
+            "anthropic-version": ANTHROPIC_VERSION,
+            "Content-Type": "application/json",
+        }
+        key = self.endpoint.require_key()
+        if getattr(self.endpoint, "auth_style", "x-api-key") == "bearer":
+            headers["Authorization"] = f"Bearer {key}"
+        else:
+            headers["x-api-key"] = key
+        return headers
+
     async def stream(
         self,
         messages: list[Message],
@@ -79,11 +94,7 @@ class AnthropicProvider(Provider):
         temperature: float | None = None,
     ) -> AsyncIterator[StreamEvent]:
         url = f"{self.endpoint.base_url}/v1/messages"
-        headers = {
-            "x-api-key": self.endpoint.require_key(),
-            "anthropic-version": ANTHROPIC_VERSION,
-            "Content-Type": "application/json",
-        }
+        headers = self._auth_headers()
         mode = getattr(self.endpoint, "system_mode", "default")
         merge_system = system if (mode == "merge" and system) else None
         payload: dict = {

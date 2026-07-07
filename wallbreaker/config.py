@@ -63,6 +63,10 @@ class Endpoint:
     # claude-code only: a file whose contents become the brain's base system prompt
     # (passed to the CLI as --system-prompt-file); the harness tool protocol is appended.
     system_prompt_file: str = ""
+    # anthropic-protocol auth header: "x-api-key" (native Anthropic, default) or "bearer"
+    # (Authorization: Bearer <key>) for third-party proxies (tokies.cc etc.) that use the
+    # ANTHROPIC_AUTH_TOKEN scheme instead of a native Anthropic key.
+    auth_style: str = "x-api-key"
 
     def resolved_key(self) -> str:
         if self.api_key:
@@ -220,6 +224,7 @@ def _endpoint_from_table(name: str, table: dict) -> Endpoint:
         reasoning=bool(table.get("reasoning", False)),
         system_mode=str(table.get("system_mode", "default")).lower(),
         system_prompt_file=str(table.get("system_prompt_file", "")),
+        auth_style=str(table.get("auth_style", "x-api-key")).lower(),
     )
 
 

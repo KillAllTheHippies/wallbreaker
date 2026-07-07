@@ -18,6 +18,16 @@ Red-team harness: configurable agentic LLM terminal with Parseltongue + L1B3RT4S
   the rtk hook SUMMARIZES pytest output to a single line (e.g. "Pytest: No tests collected"),
   which masks the real collection error; when a run looks wrong, read the tee log it prints
   (`~/Library/Application Support/rtk/tee/*_pytest.log`) or run via `.venv/bin/python` directly.
+- **[anthropic-proxy-auth]**: third-party Anthropic-compatible proxies (tokies.cc, etc.)
+  authenticate with `Authorization: Bearer <key>` (the ANTHROPIC_AUTH_TOKEN scheme), NOT the
+  native `x-api-key` header - sending x-api-key returns a misleading `401 "Key not found"` even
+  for a valid key. Endpoint option `auth_style="bearer"` (default "x-api-key") switches
+  `AnthropicProvider._auth_headers()`. Base_url is the host root (`https://tokies.cc`), provider
+  appends `/v1/messages`. DIAGNOSIS TIP: a 401 that persists across BOTH x-api-key and Bearer AND
+  across every model id = a genuinely dead key; a 401 on x-api-key that becomes a real 503/200 on
+  Bearer = auth-scheme mismatch, not a bad key. tokies served `503 overloaded_error "Model
+  temporarily unavailable"` for all 7 model ids tried once auth passed - that is a proxy
+  capacity/entitlement issue on their side, not the harness (auth + protocol were correct).
 - **[claude-code-brain]**: `providers/claude_code.py` (protocol `claude-code`) drives the local
   `claude` CLI (`-p --output-format json`) as the red-teamer brain; keyless (CLI self-auths, so
   config allows a claude-code profile with only protocol+model, no base_url/api_key). Select via
