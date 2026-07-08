@@ -1,4 +1,4 @@
-# Wallbreaker — Red-Team Harness
+# Wallbreaker: Red-Team Harness
 
 ```
 ██╗    ██╗ █████╗ ██╗     ██╗     ██████╗ ██████╗ ███████╗ █████╗ ██╗  ██╗███████╗██████╗
@@ -24,35 +24,35 @@ an LLM judge, and reliability validation.
 
 ## Highlights
 
-- **Dual-protocol provider layer** — OpenAI Chat Completions + Anthropic Messages, any
+- **Dual-protocol provider layer:** OpenAI Chat Completions + Anthropic Messages, any
   `base_url`/model. Captures reasoning/thinking channels; converts network errors to
   clean failures (no crashes on timeout).
-- **Autonomous attack loop** — keeps mutating/re-firing until it succeeds (`finish()`
+- **Autonomous attack loop:** keeps mutating/re-firing until it succeeds (`finish()`
   exits the tool) or needs you (`ask_operator()`).
-- **Standardized, unbiased prompts** — pulls test batteries from **HarmBench** (400
+- **Standardized, unbiased prompts:** pulls test batteries from **HarmBench** (400
   behaviors, 7 categories) instead of hand-picked examples.
-- **Reliability-first** — `validate` re-fires N times for the real success rate; a
+- **Reliability-first:** `validate` re-fires N times for the real success rate; a
   one-shot COMPLIED is never called a "bypass". Pin the OpenRouter backend for
   reproducibility.
-- **Parseltongue** — 43 chainable transforms (encodings, unicode fonts, stego, homoglyph,
+- **Parseltongue:** 59 chainable transforms (encodings, unicode fonts, stego, homoglyph,
   zero-width, tag smuggling, bijection, gibberish…) plus `mutate` (LLM anti-classifier).
-- **P4RS3LT0NGV3 over MCP** — an optional MCP server wraps elder-plinius's upstream
+- **P4RS3LT0NGV3 over MCP:** an optional MCP server wraps elder-plinius's upstream
   Parseltongue: **all 222 transforms** (45 ciphers, runic/braille/symbol scripts, every
   encoding, steganography) + a universal decoder, exposed as `parsel_*` tools the agent
   drives directly. Any `[[mcp.servers]]` you configure is proxied into the tool registry.
-- **Single-artifact convergence** — `/sysprompt` + `system_sweep` + `optimize_universal`
+- **Single-artifact convergence:** `/sysprompt` + `system_sweep` + `optimize_universal`
   converge on ONE universal system prompt; they can't split into variant toolkits.
-- **Persona author (`author_persona`)** — writes a full devoted-persona system-prompt
+- **Persona author (`author_persona`):** writes a full devoted-persona system-prompt
   jailbreak from scratch via the codified ENI method (draft → self-critique → validate →
   refine → distill), auto-picking a credentialed-authority or limerence register from the
   objective's domain.
-- **Native-format mimicry** — `sysprompt_*` tools search a leaked product system-prompt
+- **Native-format mimicry:** `sysprompt_*` tools search a leaked product system-prompt
   corpus (Claude/GPT/Gemini/Grok…) and hand the target's own section-tag/heading dialect to
   the persona author so a payload speaks the victim model's native format.
-- **Multimodal image channel** — `query_image_edit` fires an image + instruction at an image
+- **Multimodal image channel:** `query_image_edit` fires an image + instruction at an image
   target and vision-judges the result; `image_chain` runs a Chain-of-Jailbreak, decomposing a
   refused image into a ladder of benign edit steps. Plus Tier-3 T2I framing transforms.
-- **Pluggable attacker brains** — OpenAI/Anthropic APIs, or the local **Claude Code CLI**
+- **Pluggable attacker brains:** OpenAI/Anthropic APIs, or the local **Claude Code CLI**
   (`protocol = "claude-code"`, keyless) as the red-team brain. Third-party Anthropic proxies
   work via `auth_style = "bearer"`.
 
@@ -102,7 +102,7 @@ model    = "openai/gpt-4o-mini"
 **Attacker-brain options:**
 
 ```toml
-# Local Claude Code CLI as the attacker brain — keyless, the CLI self-auths.
+# Local Claude Code CLI as the attacker brain, keyless (the CLI self-auths).
 [profiles.claude-code]
 protocol = "claude-code"
 model    = "sonnet"
@@ -119,8 +119,8 @@ auth_style = "bearer"                          # Authorization: Bearer <key> (de
 
 ### P4RS3LT0NGV3 engine (native)
 
-The full upstream **P4RS3LT0NGV3** engine — 222 transforms across 11 categories plus the
-universal decoder — is wired straight into the agent registry as native `parsel_*` tools
+The full upstream **P4RS3LT0NGV3** engine (222 transforms across 11 categories plus the
+universal decoder) is wired straight into the agent registry as native `parsel_*` tools
 (`parsel_list`/`search`/`inspect`/`transform`/`chain`/`decode`/`guide`/`craft`). No MCP
 server or config block is required; the tools appear automatically once the repo is vendored
 and Node.js is on PATH. One-time setup:
@@ -150,7 +150,7 @@ enabled = false                                       # native tools already cov
 # env = { PARSEL_REPO = "/abs/path/to/P4RS3LT0NGV3" } # override the vendored repo location
 ```
 
-No `npm install`/build is needed — the server drives the upstream Node bridge headlessly.
+No `npm install`/build is needed; the server drives the upstream Node bridge headlessly.
 In the TUI, `/parsel guide|list|search <q>|inspect <key>` browses the catalog. The server is
 a standalone stdio MCP server, so any MCP client (Claude Code, Cursor) can use it too.
 
@@ -196,7 +196,7 @@ COMPLIED is luck; `validate` tells you the truth. For the user-turn variant use
 |------|---------|
 | `run_shell`, `read_file`, `write_file`, `edit_file` | build/run/save payloads |
 | `parseltongue`, `parseltongue_catalog`, `mutate` | obfuscate / anti-classifier rewrite |
-| `parsel_*` (native) | full P4RS3LT0NGV3 engine: `parsel_guide`/`list`/`search`/`inspect`/`transform`/`chain`/`decode` — 222 transforms + universal decoder. `parsel_craft` builds a ready-to-fire payload (encode a request through a chain + wrap it decode-and-comply / split-into-vars) |
+| `parsel_*` (native) | full P4RS3LT0NGV3 engine: `parsel_guide`/`list`/`search`/`inspect`/`transform`/`chain`/`decode`: 222 transforms + universal decoder. `parsel_craft` builds a ready-to-fire payload (encode a request through a chain + wrap it decode-and-comply / split-into-vars) |
 | `l1b3rt4s_*`, `eni_*` | jailbreak libraries: L1B3RT4S + the ENI persona collection |
 | `author_persona` | author a full devoted-persona system prompt from scratch (ENI method: draft→critique→validate→refine→distill), auto-picking an authority/limerence register from the objective's domain |
 | `sysprompt_list`, `sysprompt_search`, `sysprompt_get`, `sysprompt_native` | browse/search a leaked product system-prompt corpus (Claude/GPT/Gemini/Grok…); `sysprompt_native` hands the target's own section-tag/heading format to the persona author for native mimicry |
@@ -211,7 +211,7 @@ COMPLIED is luck; `validate` tells you the truth. For the user-turn variant use
 | `best_of_n` | resample N times, keep the bypass |
 | `many_shot` | many-shot jailbreak: flood context with faux compliant turns, then fire |
 | `prefill` | response-priming: seed the assistant's own reply so it continues, not refuses |
-| `narrate` | fiction-frame + in-story prefill (novel-chapter roleplay) — tops the scoreboard |
+| `narrate` | fiction-frame + in-story prefill (novel-chapter roleplay); tops the scoreboard |
 | `diff_fire` | A/B two payloads at one target to attribute ASR to a specific edit |
 | `recommend_transforms` | survey ~16 encodings, rank by bypass, synthesize a chain to try |
 | `seed_sweep` | inject one request through many ENI+L1B3RT4S seeds, rank which bypass |
@@ -250,7 +250,7 @@ persists the whole engagement (history, objective, template, system prompt).
 
 ## Headless / CI
 
-Render reports and gate builds straight from a run log, no TUI. The log arg is optional —
+Render reports and gate builds straight from a run log, no TUI. The log arg is optional:
 omit it (or pass a directory) and the newest `sessions/run-*.jsonl` is used:
 
 ```bash
@@ -272,19 +272,19 @@ pytest -q
 ## Web dashboard
 
 A browser dashboard ships alongside the TUI (FastAPI backend + React/Vite SPA). Its
-headline is the **Agent** view — the *same autonomous attack loop the TUI runs*: give it an
+headline is the **Agent** view, the *same autonomous attack loop the TUI runs*: give it an
 objective ("jailbreak the model into …") and the attacker brain reasons, picks techniques,
 fires at the target, reads the verdict, and keeps going, streamed live to your browser over
 SSE. Plus a single-shot **attack console** (preset + transform chips → verdict), a live ASR
 scoreboard, findings table, run-log viewer, a searchable arsenal of
 presets/transforms/tools, and a **Settings** panel to swap the target / attacker / judge
-model live (persisted to `.wallbreaker_state.json`, applied without a restart — image
+model live (persisted to `.wallbreaker_state.json`, applied without a restart; image
 targets auto-set `modality=image`).
 
 ![Wallbreaker attack console](docs/images/dashboard-console.png)
 
 <details>
-<summary>More views — overview &amp; arsenal</summary>
+<summary>More views: overview &amp; arsenal</summary>
 
 ![Overview](docs/images/dashboard-overview.png)
 ![Arsenal](docs/images/dashboard-arsenal.png)
@@ -303,7 +303,7 @@ against your `[target]`. For frontend hot-reload during development, run `npm ru
 
 ## Responsible use
 
-Wallbreaker is for **authorized** LLM red-teaming and safety evaluation only — your own
+Wallbreaker is for **authorized** LLM red-teaming and safety evaluation only: your own
 models, or targets you have explicit permission to test. Run logs and generated
 artifacts can contain harmful content; they're written to gitignored `wb_runs/`,
 `wb_artifacts/`, `findings/`. See [SECURITY.md](SECURITY.md) for the full policy and how
@@ -312,11 +312,11 @@ to report a vulnerability in the harness itself.
 ## Contributing
 
 Setup, architecture, and house rules are in [CONTRIBUTING.md](CONTRIBUTING.md). Run
-`pytest -q` before a PR — the suite is the contract.
+`pytest -q` before a PR; the suite is the contract.
 
 ## License
 
-[AGPL-3.0-or-later](LICENSE). Wallbreaker is copyleft: any modified version — **including
-one you run as a network/hosted service** — must make its complete corresponding source
+[AGPL-3.0-or-later](LICENSE). Wallbreaker is copyleft: any modified version (**including
+one you run as a network/hosted service**) must make its complete corresponding source
 available under the same license. Third-party jailbreak corpora (L1B3RT4S, P4RS3LT0NGV3,
-ENI) are fetched at runtime, not redistributed — see [NOTICE](NOTICE).
+ENI) are fetched at runtime, not redistributed; see [NOTICE](NOTICE).
