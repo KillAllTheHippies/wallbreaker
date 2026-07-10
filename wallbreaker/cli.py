@@ -4,6 +4,8 @@ import argparse
 import asyncio
 import sys
 
+from dotenv import load_dotenv
+
 from .config import Config, ConfigError, Endpoint, load_config
 from .providers.base import ProviderError
 
@@ -240,6 +242,7 @@ async def _one_shot(config: Config, args: argparse.Namespace) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
+    load_dotenv()
     raw = list(sys.argv[1:] if argv is None else argv)
     first_pos = next((a for a in raw if not a.startswith("-")), None)
 
