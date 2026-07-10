@@ -16,6 +16,57 @@ _RUN_NAME_RE = re.compile(r"^run-(\d{8})-?(\d{6})\.jsonl$")
 _FIRE_TOOLS = {"query_target", "continue_target", "fire", "query_image_target"}
 _FINDING_KINDS = {"verdict", "attack_fire"}
 _FINDING_LABELS = {"COMPLIED", "PARTIAL"}
+_ENDPOINT_PREFIXES = ("attacker", "target", "judge", "art")
+_ENDPOINT_FIELDS = (
+    "protocol", "base_url", "model", "api_key_env", "provider", "timeout",
+    "modality", "reasoning", "system_mode", "system_prompt_file", "auth_style",
+)
+
+
+TYPICAL_CONFIGURATIONS = [
+    {
+        "id": "balanced",
+        "name": "Balanced",
+        "description": "Default dashboard run profile.",
+        "agent": {"max_rounds": 8, "max_tokens": 8192},
+        "advanced": {
+            "runtime": {
+                "auto": False, "rounds": 8, "no_tools": False,
+                "exit_on_finish": True, "log": True, "judge": True, "resume": "",
+            },
+            "target": {"timeout": 90, "reasoning": False},
+            "judge": {"timeout": 120, "reasoning": False},
+        },
+    },
+    {
+        "id": "fast_triage",
+        "name": "Fast triage",
+        "description": "Short agent runs and lower token budgets.",
+        "agent": {"max_rounds": 4, "max_tokens": 4096},
+        "advanced": {
+            "runtime": {
+                "auto": False, "rounds": 4, "no_tools": False,
+                "exit_on_finish": True, "log": True, "judge": False, "resume": "",
+            },
+            "target": {"timeout": 30, "reasoning": False},
+            "judge": {"timeout": 60, "reasoning": False},
+        },
+    },
+    {
+        "id": "deep_audit",
+        "name": "Deep audit",
+        "description": "Longer autonomous runs with larger response budgets.",
+        "agent": {"max_rounds": 20, "max_tokens": 16000},
+        "advanced": {
+            "runtime": {
+                "auto": True, "rounds": 20, "no_tools": False,
+                "exit_on_finish": False, "log": True, "judge": True, "resume": "",
+            },
+            "target": {"timeout": 180, "reasoning": True},
+            "judge": {"timeout": 180, "reasoning": False},
+        },
+    },
+]
 
 
 def _run_time_from_name(name: str) -> str:
@@ -394,6 +445,152 @@ def _agent_settings(prefs: dict | None = None) -> dict:
     }
 
 
+def _bool_setting(value, default: bool = False) -> bool:
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() in ("1", "true", "yes", "on")
+    return bool(value)
+
+
+def _endpoint_to_advanced(endpoint, prefs: dict, prefix: str) -> dict:
+    data = {
+        "protocol": getattr(endpoint, "protocol", "") if endpoint else "",
+        "base_url": getattr(endpoint, "base_url", "") if endpoint else "",
+        "model": getattr(endpoint, "model", "") if endpoint else "",
+        "api_key_env": getattr(endpoint, "api_key_env", "") if endpoint else "",
+        "provider": ",".join(getattr(endpoint, "provider", ()) or ()) if endpoint else "",
+        "timeout": getattr(endpoint, "timeout", 0) if endpoint else 0,
+        "modality": getattr(endpoint, "modality", "text") if endpoint else "text",
+        "reasoning": bool(getattr(endpoint, "reasoning", False)) if endpoint else False,
+        "system_mode": getattr(endpoint, "system_mode", "default") if endpoint else "default",
+        "system_prompt_file": getattr(endpoint, "system_prompt_file", "") if endpoint else "",
+        "auth_style": getattr(endpoint, "auth_style", "x-api-key") if endpoint else "x-api-key",
+    }
+    for field in _ENDPOINT_FIELDS:
+        key = f"{prefix}_{field}"
+        if key in prefs:
+            data[field] = prefs[key]
+    if isinstance(data.get("provider"), list):
+        data["provider"] = ",".join(str(item) for item in data["provider"])
+    return data
+
+
+def _advanced_settings(config, prefs: dict | None = None) -> dict:
+    prefs = prefs or {}
+    attacker = None
+    if config is not None and getattr(config, "profiles", None):
+        try:
+            attacker = config.profile()
+        except Exception:
+            attacker = None
+    return {
+        "runtime": {
+            "auto": _bool_setting(prefs.get("auto"), False),
+            "rounds": _int_setting(prefs.get("rounds"), 12, 1, 50),
+            "no_tools": _bool_setting(prefs.get("no_tools"), False),
+            "exit_on_finish": _bool_setting(prefs.get("exit_on_finish"), True),
+            "log": _bool_setting(prefs.get("log"), True),
+            "judge": _bool_setting(prefs.get("judge"), False),
+            "resume": str(prefs.get("resume", "")),
+        },
+        "attacker": _endpoint_to_advanced(attacker, prefs, "attacker"),
+        "target": _endpoint_to_advanced(getattr(config, "target", None), prefs, "target"),
+        "judge": _endpoint_to_advanced(getattr(config, "judge", None), prefs, "judge"),
+        "art": _endpoint_to_advanced(getattr(config, "art", None), prefs, "art"),
+    }
+
+
+def _parse_provider(value) -> list[str]:
+    if isinstance(value, str):
+        return [item.strip() for item in value.split(",") if item.strip()]
+    if isinstance(value, list):
+        return [str(item).strip() for item in value if str(item).strip()]
+    return []
+
+
+def _store_advanced_settings(prefs: dict, advanced: dict) -> None:
+    runtime = advanced.get("runtime") if isinstance(advanced.get("runtime"), dict) else {}
+    if "auto" in runtime:
+        prefs["auto"] = _bool_setting(runtime.get("auto"), False)
+    if "rounds" in runtime:
+        prefs["rounds"] = _int_setting(runtime.get("rounds"), 12, 1, 50)
+    if "no_tools" in runtime:
+        prefs["no_tools"] = _bool_setting(runtime.get("no_tools"), False)
+    if "exit_on_finish" in runtime:
+        prefs["exit_on_finish"] = _bool_setting(runtime.get("exit_on_finish"), True)
+    if "log" in runtime:
+        prefs["log"] = _bool_setting(runtime.get("log"), True)
+    if "judge" in runtime:
+        prefs["judge"] = _bool_setting(runtime.get("judge"), False)
+    if "resume" in runtime:
+        prefs["resume"] = str(runtime.get("resume") or "")
+
+    for prefix in _ENDPOINT_PREFIXES:
+        section = advanced.get(prefix)
+        if not isinstance(section, dict):
+            continue
+        for field in _ENDPOINT_FIELDS:
+            if field not in section:
+                continue
+            key = f"{prefix}_{field}"
+            value = section[field]
+            if field == "provider":
+                prefs[key] = _parse_provider(value)
+            elif field == "timeout":
+                prefs[key] = _int_setting(value, 0, 0, 600)
+            elif field == "reasoning":
+                prefs[key] = _bool_setting(value, False)
+            elif field == "modality":
+                prefs[key] = str(value).lower() if str(value).lower() in ("text", "image", "auto") else "text"
+            elif field == "system_mode":
+                prefs[key] = str(value).lower() if str(value).lower() in ("default", "merge", "drop") else "default"
+            elif field == "protocol":
+                prefs[key] = str(value).lower() if str(value).lower() in ("openai", "anthropic", "claude-code") else ""
+            elif field == "auth_style":
+                prefs[key] = str(value).lower() if str(value).lower() in ("x-api-key", "bearer") else "x-api-key"
+            else:
+                prefs[key] = str(value or "")
+
+
+def _replace_endpoint(endpoint, prefix: str, prefs: dict):
+    if endpoint is None:
+        return None
+    updates = {}
+    for field in _ENDPOINT_FIELDS:
+        key = f"{prefix}_{field}"
+        if key not in prefs:
+            continue
+        value = prefs[key]
+        if field == "provider":
+            updates[field] = tuple(_parse_provider(value))
+        elif field == "timeout":
+            updates[field] = float(_int_setting(value, 0, 0, 600))
+        elif field == "reasoning":
+            updates[field] = _bool_setting(value, False)
+        elif field == "modality":
+            mod = str(value).lower()
+            if mod in ("text", "image"):
+                updates[field] = mod
+        elif field == "protocol":
+            protocol = str(value).lower()
+            if protocol in ("openai", "anthropic", "claude-code"):
+                updates[field] = protocol
+        elif field == "system_mode":
+            mode = str(value).lower()
+            if mode in ("default", "merge", "drop"):
+                updates[field] = mode
+        elif field == "auth_style":
+            auth_style = str(value).lower()
+            if auth_style in ("x-api-key", "bearer"):
+                updates[field] = auth_style
+        else:
+            updates[field] = str(value or "").rstrip("/") if field == "base_url" else str(value or "")
+    return dataclasses.replace(endpoint, **updates) if updates else endpoint
+
+
 def _compose_attack_payload(body: dict) -> dict:
     request = str(body.get("request") or body.get("prompt") or "").strip()
     preset_name = str(body.get("preset") or "").strip()
@@ -466,19 +663,30 @@ def _apply_settings(config, prefs: dict) -> None:
     if isinstance(am, str) and am and config.profiles:
         cur = config.profile()
         config.profiles[config.default_profile] = dataclasses.replace(cur, model=am)
+    if config.profiles:
+        cur = config.profile()
+        config.profiles[config.default_profile] = _replace_endpoint(cur, "attacker", prefs)
     jm = prefs.get("judge_model")
     if isinstance(jm, str) and jm:
         if config.judge is not None:
             config.judge = dataclasses.replace(config.judge, model=jm)
         elif config.profiles:
             config.judge = dataclasses.replace(config.profile(), name="judge", model=jm)
+    if config.target is not None:
+        config.target = _replace_endpoint(config.target, "target", prefs)
+    if config.judge is not None:
+        config.judge = _replace_endpoint(config.judge, "judge", prefs)
+    if config.art is not None:
+        config.art = _replace_endpoint(config.art, "art", prefs)
 
 
 def _settings_view(config, prefs: dict | None = None) -> dict:
     agent = _agent_settings(prefs)
     if config is None:
         return {"profiles": [], "default_profile": None, "attacker_model": None,
-                "target": None, "judge_model": None, "agent": agent}
+                "target": None, "judge_model": None, "agent": agent,
+                "advanced": _advanced_settings(None, prefs),
+                "typical_configurations": TYPICAL_CONFIGURATIONS}
     attacker_model = None
     if config.profiles:
         try:
@@ -501,6 +709,8 @@ def _settings_view(config, prefs: dict | None = None) -> dict:
         "target": target,
         "judge_model": getattr(judge, "model", None) if judge else None,
         "agent": agent,
+        "advanced": _advanced_settings(config, prefs),
+        "typical_configurations": TYPICAL_CONFIGURATIONS,
     }
 
 
@@ -598,6 +808,16 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
             prefs["agent_max_tokens"] = _int_setting(agent.get("agent_max_tokens"), 8192, 256, 32000)
         if "max_tokens" in agent:
             prefs["agent_max_tokens"] = _int_setting(agent.get("max_tokens"), 8192, 256, 32000)
+        if isinstance(body.get("advanced"), dict):
+            _store_advanced_settings(prefs, body["advanced"])
+        if body.get("typical_configuration"):
+            preset_id = str(body.get("typical_configuration"))
+            preset = next((item for item in TYPICAL_CONFIGURATIONS if item["id"] == preset_id), None)
+            if preset is None:
+                raise HTTPException(status_code=400, detail=f"unknown configuration '{preset_id}'")
+            prefs["agent_max_rounds"] = preset["agent"]["max_rounds"]
+            prefs["agent_max_tokens"] = preset["agent"]["max_tokens"]
+            _store_advanced_settings(prefs, preset["advanced"])
 
         save_state(state_path_for(config), prefs)
         _apply_settings(config, prefs)

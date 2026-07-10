@@ -200,6 +200,8 @@ def test_settings_get_and_set(tmp_path):
     assert g["target"]["model"] == "some/text-model"
     assert g["agent"]["max_rounds"] == 8
     assert g["agent"]["max_tokens"] == 8192
+    assert len(g["typical_configurations"]) >= 3
+    assert g["advanced"]["runtime"]["rounds"] == 12
 
     r = client.post("/api/settings", json={"target_model": "google/gemini-3-pro-image", "target_modality": "auto"})
     assert r.status_code == 200
@@ -212,3 +214,19 @@ def test_settings_get_and_set(tmp_path):
 
     r3 = client.post("/api/settings", json={"agent": {"max_rounds": 18, "max_tokens": 12000}})
     assert r3.json()["agent"] == {"max_rounds": 18, "max_tokens": 12000}
+
+    r4 = client.post("/api/settings", json={
+        "advanced": {
+            "runtime": {"rounds": 16, "auto": True, "log": True},
+            "target": {"base_url": "https://target.example/v1", "timeout": 45, "provider": "WandB,Alibaba"},
+            "judge": {"reasoning": True},
+        }
+    })
+    assert r4.json()["advanced"]["runtime"]["rounds"] == 16
+    assert cfg.target.base_url == "https://target.example/v1"
+    assert cfg.target.timeout == 45
+    assert cfg.target.provider == ("WandB", "Alibaba")
+
+    r5 = client.post("/api/settings", json={"typical_configuration": "fast_triage"})
+    assert r5.json()["agent"] == {"max_rounds": 4, "max_tokens": 4096}
+    assert r5.json()["advanced"]["runtime"]["rounds"] == 4

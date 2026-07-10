@@ -109,11 +109,53 @@ export interface Settings {
   target: { model: string; modality: string; base_url: string; protocol: string; provider: string[] } | null;
   judge_model: string | null;
   agent?: AgentConfig;
+  advanced?: AdvancedSettings;
+  typical_configurations?: TypicalConfiguration[];
 }
 
 export interface AgentConfig {
   max_rounds: number;
   max_tokens: number;
+}
+
+export interface RuntimeAdvancedSettings {
+  auto: boolean;
+  rounds: number;
+  no_tools: boolean;
+  exit_on_finish: boolean;
+  log: boolean;
+  judge: boolean;
+  resume: string;
+}
+
+export interface EndpointAdvancedSettings {
+  protocol: string;
+  base_url: string;
+  model: string;
+  api_key_env: string;
+  provider: string;
+  timeout: number;
+  modality: string;
+  reasoning: boolean;
+  system_mode: string;
+  system_prompt_file: string;
+  auth_style: string;
+}
+
+export interface AdvancedSettings {
+  runtime: RuntimeAdvancedSettings;
+  attacker: EndpointAdvancedSettings;
+  target: EndpointAdvancedSettings;
+  judge: EndpointAdvancedSettings;
+  art: EndpointAdvancedSettings;
+}
+
+export interface TypicalConfiguration {
+  id: string;
+  name: string;
+  description: string;
+  agent: AgentConfig;
+  advanced: Partial<AdvancedSettings>;
 }
 
 export interface Preset { name: string; description: string }

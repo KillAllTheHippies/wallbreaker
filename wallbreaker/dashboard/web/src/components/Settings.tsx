@@ -1,5 +1,11 @@
 import { useEffect, useState } from "react";
-import { api, type AgentConfig, type Settings as SettingsT } from "../api";
+import { api, type AdvancedSettings, type AgentConfig, type Settings as SettingsT, type TypicalConfiguration } from "../api";
+import {
+  AdvancedSettingsDrawer,
+  DEFAULT_ADVANCED_SETTINGS,
+  mergeAdvancedSettings,
+  normalizeAdvancedSettings,
+} from "./AdvancedSettingsDrawer";
 import { AgentConfigDrawer, DEFAULT_AGENT_CONFIG, normalizeAgentConfig } from "./AgentConfigDrawer";
 
 export function Settings({ onSaved }: { onSaved?: () => void }) {
@@ -12,6 +18,8 @@ export function Settings({ onSaved }: { onSaved?: () => void }) {
   const [judgeModel, setJudgeModel] = useState("");
   const [agentConfig, setAgentConfig] = useState<AgentConfig>(DEFAULT_AGENT_CONFIG);
   const [agentStatus, setAgentStatus] = useState("");
+  const [advanced, setAdvanced] = useState<AdvancedSettings>(DEFAULT_ADVANCED_SETTINGS);
+  const [advancedStatus, setAdvancedStatus] = useState("");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
   const [err, setErr] = useState("");
@@ -25,6 +33,7 @@ export function Settings({ onSaved }: { onSaved?: () => void }) {
       setAttackerModel(v.attacker_model ?? "");
       setJudgeModel(v.judge_model ?? "");
       setAgentConfig(normalizeAgentConfig(v.agent));
+      setAdvanced(normalizeAdvancedSettings(v.advanced));
       setTargetProfile("");
     }).catch((e) => setErr((e as Error).message));
   }
@@ -36,6 +45,7 @@ export function Settings({ onSaved }: { onSaved?: () => void }) {
       const v = await api.saveSettings(body);
       setS(v);
       setAgentConfig(normalizeAgentConfig(v.agent));
+      setAdvanced(normalizeAdvancedSettings(v.advanced));
       setMsg("saved");
       onSaved?.();
       setTimeout(() => setMsg(""), 1800);
@@ -54,6 +64,32 @@ export function Settings({ onSaved }: { onSaved?: () => void }) {
     if (saved) {
       setAgentStatus("saved");
       setTimeout(() => setAgentStatus(""), 1600);
+    }
+  }
+
+  async function saveAdvanced() {
+    setAdvancedStatus("");
+    const saved = await save({ advanced });
+    if (saved) {
+      setAdvancedStatus("saved");
+      setTimeout(() => setAdvancedStatus(""), 1600);
+    }
+  }
+
+  async function applyTypicalConfiguration(preset: TypicalConfiguration) {
+    setAdvancedStatus("");
+    const nextAdvanced = mergeAdvancedSettings(advanced, preset.advanced);
+    const nextAgent = normalizeAgentConfig(preset.agent);
+    setAdvanced(nextAdvanced);
+    setAgentConfig(nextAgent);
+    const saved = await save({
+      typical_configuration: preset.id,
+      advanced: nextAdvanced,
+      agent: nextAgent,
+    });
+    if (saved) {
+      setAdvancedStatus(`${preset.name} saved`);
+      setTimeout(() => setAdvancedStatus(""), 1800);
     }
   }
 
@@ -128,6 +164,18 @@ export function Settings({ onSaved }: { onSaved?: () => void }) {
           onSave={saveAgentConfig}
           saving={busy}
           status={agentStatus}
+        />
+      </div>
+
+      <div className="card" style={{ gridColumn: "1 / -1" }}>
+        <AdvancedSettingsDrawer
+          value={advanced}
+          presets={s.typical_configurations || []}
+          onChange={setAdvanced}
+          onSave={saveAdvanced}
+          onApplyPreset={applyTypicalConfiguration}
+          saving={busy}
+          status={advancedStatus}
         />
       </div>
 
