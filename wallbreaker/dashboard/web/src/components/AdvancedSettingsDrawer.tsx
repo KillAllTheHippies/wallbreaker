@@ -1,9 +1,11 @@
 import type {
   AdvancedSettings,
   EndpointAdvancedSettings,
+  ProfileDetail,
   RuntimeAdvancedSettings,
   TypicalConfiguration,
 } from "../api";
+import { ModelChooser } from "./ModelChooser";
 
 const DEFAULT_ENDPOINT: EndpointAdvancedSettings = {
   protocol: "openai",
@@ -111,6 +113,8 @@ export function AdvancedSettingsDrawer({
   onApplyPreset,
   saving = false,
   status = "",
+  profileDetails,
+  defaultProfile,
 }: {
   value: AdvancedSettings;
   presets: TypicalConfiguration[];
@@ -119,6 +123,8 @@ export function AdvancedSettingsDrawer({
   onApplyPreset: (preset: TypicalConfiguration) => void;
   saving?: boolean;
   status?: string;
+  profileDetails: Record<string, ProfileDetail>;
+  defaultProfile: string;
 }) {
   const setRuntime = <K extends keyof RuntimeAdvancedSettings>(key: K, nextValue: RuntimeAdvancedSettings[K]) => {
     onChange(normalizeAdvancedSettings({
@@ -179,6 +185,8 @@ export function AdvancedSettingsDrawer({
             title={label}
             value={value[id]}
             onChange={(key, next) => setEndpoint(id, key, next)}
+            modelProfile={endpointProfile(value[id], profileDetails, defaultProfile)}
+            saving={saving}
           />
         ))}
 
@@ -193,20 +201,44 @@ export function AdvancedSettingsDrawer({
   );
 }
 
+function endpointProfile(
+  endpoint: EndpointAdvancedSettings,
+  profiles: Record<string, ProfileDetail>,
+  fallback: string,
+): string {
+  const match = Object.entries(profiles).find(([, profile]) => (
+    profile.base_url === endpoint.base_url && profile.protocol === endpoint.protocol
+  ));
+  return match?.[0] || fallback;
+}
+
 function EndpointSection({
   title,
   value,
   onChange,
+  modelProfile,
+  saving,
 }: {
   title: string;
   value: EndpointAdvancedSettings;
   onChange: <K extends keyof EndpointAdvancedSettings>(key: K, value: EndpointAdvancedSettings[K]) => void;
+  modelProfile: string;
+  saving: boolean;
 }) {
   return (
     <div className="advanced-section">
       <h3>{title}</h3>
       <div className="advanced-grid">
-        <TextField label="Model" value={value.model} onChange={(next) => onChange("model", next)} />
+        <div className="advanced-field">
+          <span>Model</span>
+          <ModelChooser
+            profile={modelProfile}
+            value={value.model}
+            onChange={(next) => onChange("model", next)}
+            disabled={saving}
+            ariaLabel={`${title} model`}
+          />
+        </div>
         <SelectField
           label="Protocol"
           value={value.protocol}

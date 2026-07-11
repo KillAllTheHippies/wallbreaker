@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api, type ConfigInfo, type Overview as OverviewT } from "./api";
+import { api, type ConfigInfo, type Overview as OverviewT, type Settings as SettingsT } from "./api";
 import { Agent } from "./components/Agent";
 import { Overview } from "./components/Overview";
 import { Console } from "./components/Console";
@@ -7,6 +7,7 @@ import { Findings } from "./components/Findings";
 import { Runs } from "./components/Runs";
 import { Arsenal } from "./components/Arsenal";
 import { Settings } from "./components/Settings";
+import { ModelChooser } from "./components/ModelChooser";
 
 type Tab = "agent" | "overview" | "console" | "findings" | "runs" | "arsenal" | "settings";
 
@@ -33,12 +34,18 @@ export function App() {
   const setTab = (t: Tab) => { setTabState(t); window.location.hash = t; };
   const [cfg, setCfg] = useState<ConfigInfo | null>(null);
   const [ov, setOv] = useState<OverviewT | null>(null);
+  const [settings, setSettings] = useState<SettingsT | null>(null);
+  const [topTarget, setTopTarget] = useState("");
+  const [topBusy, setTopBusy] = useState(false);
+  const [topError, setTopError] = useState("");
 
   const refresh = () => {
     api.config().then(setCfg).catch(() => setCfg(null));
     api.overview().then(setOv).catch(() => setOv(null));
+    api.settings().then(setSettings).catch(() => setSettings(null));
   };
   useEffect(refresh, [tab]);
+  useEffect(() => setTopTarget(cfg?.target || ""), [cfg?.target]);
 
   const asr = ov?.scorecard?.asr;
   const asrStr = typeof asr === "number" ? `${Math.round(asr * 100)}%` : "—";
@@ -48,6 +55,41 @@ export function App() {
       window.localStorage.setItem("wallbreaker.railCollapsed", String(next));
       return next;
     });
+  };
+  const saveProfile = async (profile: string) => {
+    if (!profile) return;
+    setTopBusy(true);
+    setTopError("");
+    setSettings((current) => current ? { ...current, default_profile: profile } : current);
+    try {
+      const saved = await api.saveSettings({ attacker_profile: profile });
+      setSettings(saved);
+      refresh();
+    } catch (error) {
+      setTopError((error as Error).message);
+      refresh();
+    } finally {
+      setTopBusy(false);
+    }
+  };
+  const saveTarget = async (model: string) => {
+    const profile = settings?.default_profile;
+    if (!profile || !model.trim()) return;
+    setTopBusy(true);
+    setTopError("");
+    try {
+      const saved = await api.saveSettings({
+        target_profile: profile,
+        target_model: model.trim(),
+      });
+      setSettings(saved);
+      setTopTarget(saved.target?.model || model.trim());
+      refresh();
+    } catch (error) {
+      setTopError((error as Error).message);
+    } finally {
+      setTopBusy(false);
+    }
   };
 
   return (
@@ -91,8 +133,33 @@ export function App() {
         <div className="topbar">
           <div className="title">{NAV.find((n) => n.id === tab)?.label}</div>
           <div className="meta">
-            <span>profile <b>{cfg?.profile ?? "—"}</b></span>
-            <span>target <b className="accent">{cfg?.target ?? "none"}</b></span>
+            <label className="topbar-profile">
+              <span>profile</span>
+              <select
+                aria-label="Provider profile"
+                value={settings?.default_profile || ""}
+                disabled={topBusy || !settings}
+                onChange={(event) => void saveProfile(event.target.value)}
+              >
+                {(settings?.profiles || []).map((profile) => (
+                  <option key={profile} value={profile}>{profile}</option>
+                ))}
+              </select>
+            </label>
+            <label className="topbar-target">
+              <span>target</span>
+              <ModelChooser
+                compact
+                ariaLabel="Target model"
+                profile={settings?.default_profile || ""}
+                value={topTarget}
+                onChange={setTopTarget}
+                onCommit={(model) => void saveTarget(model)}
+                disabled={topBusy || !settings}
+                placeholder="choose target"
+              />
+            </label>
+            {topError && <span className="topbar-error" title={topError}>!</span>}
             <span className="pill">ASR {asrStr}</span>
           </div>
         </div>

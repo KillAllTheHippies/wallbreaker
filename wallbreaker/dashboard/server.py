@@ -666,6 +666,9 @@ def _apply_settings(config, prefs: dict) -> None:
     if config.profiles:
         cur = config.profile()
         config.profiles[config.default_profile] = _replace_endpoint(cur, "attacker", prefs)
+    judge_profile = prefs.get("judge_profile")
+    if isinstance(judge_profile, str) and judge_profile in config.profiles:
+        config.judge = dataclasses.replace(config.profiles[judge_profile], name="judge")
     jm = prefs.get("judge_model")
     if isinstance(jm, str) and jm:
         if config.judge is not None:
@@ -718,7 +721,9 @@ def _settings_view(config, prefs: dict | None = None) -> dict:
         "default_profile": config.default_profile,
         "attacker_model": attacker_model,
         "target": target,
+        "target_profile": prefs.get("target_profile") if isinstance(prefs.get("target_profile"), str) else None,
         "judge_model": getattr(judge, "model", None) if judge else None,
+        "judge_profile": prefs.get("judge_profile") if isinstance(prefs.get("judge_profile"), str) else None,
         "agent": agent,
         "advanced": _advanced_settings(config, prefs),
         "typical_configurations": TYPICAL_CONFIGURATIONS,
@@ -892,8 +897,19 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
             prefs.pop("attacker_model", None)
         if body.get("attacker_model"):
             prefs["attacker_model"] = str(body["attacker_model"])
-        if body.get("judge_model"):
+        has_judge_profile = bool(body.get("judge_profile"))
+        has_judge_model = bool(body.get("judge_model"))
+        if has_judge_profile:
+            name = str(body["judge_profile"])
+            if name not in config.profiles:
+                raise HTTPException(status_code=400, detail=f"unknown profile '{name}'")
+            prefs["judge_profile"] = name
+            if not has_judge_model:
+                prefs.pop("judge_model", None)
+        if has_judge_model:
             prefs["judge_model"] = str(body["judge_model"])
+            if not has_judge_profile:
+                prefs.pop("judge_profile", None)
         agent = body.get("agent") if isinstance(body.get("agent"), dict) else body
         if "agent_max_rounds" in agent:
             prefs["agent_max_rounds"] = _int_setting(agent.get("agent_max_rounds"), 8, 1, 50)

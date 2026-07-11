@@ -341,3 +341,11 @@ def test_target_profile_and_custom_model_persist_together(tmp_path):
     prefs = load_state(state_path_for(cfg))
     assert prefs["target_profile"] == "two"
     assert prefs["target_model"] == "custom-model"
+
+    judge_response = client.post(
+        "/api/settings",
+        json={"judge_profile": "two", "judge_model": "judge-model"},
+    )
+    assert judge_response.status_code == 200
+    assert judge_response.json()["judge_model"] == "judge-model"
+    assert judge_response.json()["advanced"]["judge"]["base_url"] == "https://two.example/v1"

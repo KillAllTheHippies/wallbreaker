@@ -7,6 +7,17 @@ import {
   normalizeAdvancedSettings,
 } from "./AdvancedSettingsDrawer";
 import { AgentConfigDrawer, DEFAULT_AGENT_CONFIG, normalizeAgentConfig } from "./AgentConfigDrawer";
+import { ModelChooser } from "./ModelChooser";
+
+function matchingProfile(settings: SettingsT, endpoint?: { base_url: string; protocol: string } | null): string {
+  if (endpoint) {
+    const match = Object.entries(settings.profile_details || {}).find(([, profile]) => (
+      profile.base_url === endpoint.base_url && profile.protocol === endpoint.protocol
+    ));
+    if (match) return match[0];
+  }
+  return settings.default_profile || settings.profiles[0] || "";
+}
 
 export function Settings({ onSaved }: { onSaved?: () => void }) {
   const [s, setS] = useState<SettingsT | null>(null);
@@ -16,6 +27,7 @@ export function Settings({ onSaved }: { onSaved?: () => void }) {
   const [attackerProfile, setAttackerProfile] = useState("");
   const [attackerModel, setAttackerModel] = useState("");
   const [judgeModel, setJudgeModel] = useState("");
+  const [judgeProfile, setJudgeProfile] = useState("");
   const [agentConfig, setAgentConfig] = useState<AgentConfig>(DEFAULT_AGENT_CONFIG);
   const [agentStatus, setAgentStatus] = useState("");
   const [advanced, setAdvanced] = useState<AdvancedSettings>(DEFAULT_ADVANCED_SETTINGS);
@@ -34,7 +46,8 @@ export function Settings({ onSaved }: { onSaved?: () => void }) {
       setJudgeModel(v.judge_model ?? "");
       setAgentConfig(normalizeAgentConfig(v.agent));
       setAdvanced(normalizeAdvancedSettings(v.advanced));
-      setTargetProfile("");
+      setTargetProfile(v.target_profile || matchingProfile(v, v.target));
+      setJudgeProfile(v.judge_profile || matchingProfile(v, v.advanced?.judge));
     }).catch((e) => setErr((e as Error).message));
   }
   useEffect(load, []);
@@ -99,9 +112,19 @@ export function Settings({ onSaved }: { onSaved?: () => void }) {
     <div className="grid cols-2" style={{ maxWidth: 920 }}>
       <div className="card">
         <h3>Target — the model under attack</h3>
-        <label className="fld">Set target by model id</label>
-        <input type="text" value={targetModel} placeholder="e.g. deepseek/deepseek-v4-pro"
-          onChange={(e) => setTargetModel(e.target.value)} />
+        <label className="fld">Provider profile</label>
+        <select value={targetProfile} onChange={(event) => setTargetProfile(event.target.value)}>
+          {s.profiles.map((profile) => <option key={profile} value={profile}>{profile}</option>)}
+        </select>
+        <label className="fld">Target model</label>
+        <ModelChooser
+          profile={targetProfile}
+          value={targetModel}
+          onChange={setTargetModel}
+          disabled={busy}
+          placeholder="Choose or paste a target model id"
+          ariaLabel="Target model"
+        />
         <label className="fld">Modality</label>
         <select value={modality} onChange={(e) => setModality(e.target.value)}>
           <option value="auto">auto-detect from model id</option>
@@ -109,23 +132,13 @@ export function Settings({ onSaved }: { onSaved?: () => void }) {
           <option value="image">image</option>
         </select>
         <button className="fire" disabled={busy || !targetModel.trim()}
-          onClick={() => save({ target_model: targetModel.trim(), target_modality: modality })}>
+          onClick={() => save({
+            target_profile: targetProfile,
+            target_model: targetModel.trim(),
+            target_modality: modality,
+          })}>
           Set target model
         </button>
-
-        {s.profiles.length > 0 && (
-          <>
-            <label className="fld">…or use a configured profile as target</label>
-            <div style={{ display: "flex", gap: 8 }}>
-              <select value={targetProfile} onChange={(e) => setTargetProfile(e.target.value)} style={{ flex: 1 }}>
-                <option value="">— pick a profile —</option>
-                {s.profiles.map((p) => <option key={p} value={p}>{p}</option>)}
-              </select>
-              <button className="chip on" style={{ padding: "0 16px" }} disabled={busy || !targetProfile}
-                onClick={() => save({ target_profile: targetProfile })}>use</button>
-            </div>
-          </>
-        )}
         <div className="muted mono" style={{ marginTop: 14, fontSize: 12 }}>
           current: <b className="accent">{s.target?.model ?? "none"}</b>
           {s.target ? ` · ${s.target.modality}` : ""}
@@ -140,17 +153,33 @@ export function Settings({ onSaved }: { onSaved?: () => void }) {
         </select>
         <label className="fld">Attacker model override (optional)</label>
         <div style={{ display: "flex", gap: 8 }}>
-          <input type="text" value={attackerModel} placeholder="e.g. glm-5.2" style={{ flex: 1 }}
-            onChange={(e) => setAttackerModel(e.target.value)} />
+          <ModelChooser
+            profile={attackerProfile}
+            value={attackerModel}
+            onChange={setAttackerModel}
+            disabled={busy}
+            placeholder="Choose or paste an attacker model id"
+            ariaLabel="Attacker model"
+          />
           <button className="chip on" style={{ padding: "0 16px" }} disabled={busy || !attackerModel.trim()}
             onClick={() => save({ attacker_model: attackerModel.trim() })}>set</button>
         </div>
+        <label className="fld">Judge provider</label>
+        <select value={judgeProfile} onChange={(event) => setJudgeProfile(event.target.value)}>
+          {s.profiles.map((profile) => <option key={profile} value={profile}>{profile}</option>)}
+        </select>
         <label className="fld">Judge model</label>
         <div style={{ display: "flex", gap: 8 }}>
-          <input type="text" value={judgeModel} placeholder="e.g. openai/gpt-4o-mini" style={{ flex: 1 }}
-            onChange={(e) => setJudgeModel(e.target.value)} />
+          <ModelChooser
+            profile={judgeProfile}
+            value={judgeModel}
+            onChange={setJudgeModel}
+            disabled={busy}
+            placeholder="Choose or paste a judge model id"
+            ariaLabel="Judge model"
+          />
           <button className="chip on" style={{ padding: "0 16px" }} disabled={busy || !judgeModel.trim()}
-            onClick={() => save({ judge_model: judgeModel.trim() })}>set</button>
+            onClick={() => save({ judge_profile: judgeProfile, judge_model: judgeModel.trim() })}>set</button>
         </div>
         <div className="muted mono" style={{ marginTop: 14, fontSize: 12 }}>
           brain <b className="accent">{s.attacker_model ?? s.default_profile ?? "—"}</b> · judge <b>{s.judge_model ?? "—"}</b>
@@ -176,6 +205,8 @@ export function Settings({ onSaved }: { onSaved?: () => void }) {
           onApplyPreset={applyTypicalConfiguration}
           saving={busy}
           status={advancedStatus}
+          profileDetails={s.profile_details || {}}
+          defaultProfile={s.default_profile || ""}
         />
       </div>
 

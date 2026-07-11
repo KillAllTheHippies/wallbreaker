@@ -104,13 +104,32 @@ export interface RunDetail {
 
 export interface Settings {
   profiles: string[];
+  profile_details?: Record<string, ProfileDetail>;
   default_profile: string | null;
   attacker_model: string | null;
   target: { model: string; modality: string; base_url: string; protocol: string; provider: string[] } | null;
+  target_profile?: string | null;
   judge_model: string | null;
+  judge_profile?: string | null;
   agent?: AgentConfig;
   advanced?: AdvancedSettings;
   typical_configurations?: TypicalConfiguration[];
+}
+
+export interface ProfileDetail {
+  name: string;
+  model: string;
+  protocol: string;
+  base_url: string;
+  modality: string;
+}
+
+export interface ModelCatalog {
+  profile: string;
+  protocol: string;
+  models: string[];
+  fetched: boolean;
+  error: string;
 }
 
 export interface AgentConfig {
@@ -200,6 +219,7 @@ export const api = {
   overview: () => j<Overview>("/api/overview"),
   config: () => j<ConfigInfo>("/api/config"),
   settings: () => j<Settings>("/api/settings"),
+  models: (profile: string) => j<ModelCatalog>(`/api/models?profile=${encodeURIComponent(profile)}`),
   saveSettings: (body: Record<string, unknown>) =>
     j<Settings>("/api/settings", {
       method: "POST",
