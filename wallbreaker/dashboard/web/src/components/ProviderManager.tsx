@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api, type ProviderRecord } from "../api";
 import { invalidateModelCatalog, invalidateProviders, loadProviders } from "../dataCache";
+import { ModelChooser } from "./ModelChooser";
 
 const EMPTY = {
   name: "", protocol: "openai", base_url: "", model: "", api_key_env: "",
@@ -90,7 +91,13 @@ export function ProviderManager({ onChanged }: { onChanged: () => void }) {
           <label>Name<input value={String(form.name || "")} onChange={(e) => update("name", e.target.value)} /></label>
           <label>Protocol<select value={String(form.protocol)} onChange={(e) => update("protocol", e.target.value)}><option value="openai">OpenAI compatible</option><option value="anthropic">Anthropic compatible</option><option value="claude-code">Claude Code</option></select></label>
           <label className="wide">Base URL<input value={String(form.base_url || "")} placeholder="https://api.example.com/v1" onChange={(e) => update("base_url", e.target.value)} /></label>
-          <label>Default model<input value={String(form.model || "")} onChange={(e) => update("model", e.target.value)} /></label>
+          <label>Default model<ModelChooser
+            profile={String(form.name || "")}
+            value={String(form.model || "")}
+            onChange={(value) => update("model", value)}
+            placeholder="Type or choose a model id"
+            ariaLabel="Default model"
+          /></label>
           <label>Key environment variable<input value={String(form.api_key_env || "")} placeholder="PROVIDER_API_KEY" onChange={(e) => update("api_key_env", e.target.value)} /></label>
           <label>API key<input type="password" value={String(form.api_key || "")} placeholder={form.has_api_key ? "Stored; enter to replace" : "Stored locally in .env"} onChange={(e) => update("api_key", e.target.value)} /></label>
           <label>Authentication<select value={String(form.auth_style || "bearer")} onChange={(e) => update("auth_style", e.target.value)}><option value="bearer">Bearer token</option><option value="x-api-key">x-api-key</option></select></label>

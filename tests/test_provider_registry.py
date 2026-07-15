@@ -38,6 +38,15 @@ def test_provider_crud_redacts_key_and_updates_env(tmp_path):
     persisted = json.loads((tmp_path / ".wallbreaker_providers.json").read_text())
     assert persisted["providers"]["custom"]["model"] == "custom-model"
 
+    updated = client.put("/api/providers/custom", json={
+        "api_key_env": "CUSTOM_API_KEY",
+        "api_key": "replacement-secret",
+    })
+    assert updated.status_code == 200
+    env_text = (tmp_path / ".env").read_text(encoding="utf-8")
+    assert "CUSTOM_API_KEY='replacement-secret'" in env_text
+    assert "top-secret" not in env_text
+
     assert client.delete("/api/providers/custom").json() == {"ok": True}
     assert "custom" not in cfg.profiles
 
