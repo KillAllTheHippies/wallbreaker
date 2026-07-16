@@ -23,46 +23,36 @@ _ENDPOINT_FIELDS = (
     "modality", "reasoning", "system_mode", "system_prompt_file", "auth_style",
     "inference_path", "models_path",
 )
+_AGENT_CONTROL_TOOLS = {"finish", "ask_operator"}
 
 
-TYPICAL_CONFIGURATIONS = [
-    {
-        "id": "balanced",
-        "name": "Balanced",
-        "description": "Default dashboard run profile.",
-        "agent": {"max_rounds": 8, "max_tokens": 8192},
-        "advanced": {
-            "runtime": {
-                "auto": False, "rounds": 8, "no_tools": False,
-                "exit_on_finish": True, "log": True, "judge": True, "resume": "",
-            },
-        },
-    },
-    {
-        "id": "fast_triage",
-        "name": "Fast triage",
-        "description": "Short agent runs and lower token budgets.",
-        "agent": {"max_rounds": 4, "max_tokens": 4096},
-        "advanced": {
-            "runtime": {
-                "auto": False, "rounds": 4, "no_tools": False,
-                "exit_on_finish": True, "log": True, "judge": False, "resume": "",
-            },
-        },
-    },
-    {
-        "id": "deep_audit",
-        "name": "Deep audit",
-        "description": "Longer autonomous runs with larger response budgets.",
-        "agent": {"max_rounds": 20, "max_tokens": 16000},
-        "advanced": {
-            "runtime": {
-                "auto": True, "rounds": 20, "no_tools": False,
-                "exit_on_finish": False, "log": True, "judge": True, "resume": "",
-            },
-        },
-    },
-]
+class _LiveAttackerProvider:
+    """Hot-swap the attacker while preserving one autonomous conversation."""
+
+    def __init__(self, provider, endpoint, system_builder):
+        self._provider = provider
+        self.endpoint = endpoint
+        self._system_builder = system_builder
+
+    @property
+    def model(self) -> str:
+        return self.endpoint.model
+
+    def switch(self, provider, endpoint) -> None:
+        self._provider = provider
+        self.endpoint = endpoint
+
+    async def stream(self, messages, tools=None, system=None, max_tokens=4096, temperature=None):
+        provider = self._provider
+        active_system = self._system_builder(self.endpoint)
+        async for event in provider.stream(
+            messages,
+            tools=tools,
+            system=active_system,
+            max_tokens=max_tokens,
+            temperature=temperature,
+        ):
+            yield event
 
 
 def _run_time_from_name(name: str) -> str:
@@ -77,18 +67,50 @@ def _run_time_from_name(name: str) -> str:
 
 
 def _models_from_records(records: list[dict]) -> dict:
+    found = {"attacker": "", "target": "", "judge": ""}
+
+    def merge(value) -> None:
+        if not isinstance(value, dict):
+            return
+        for role in found:
+            model = value.get(role)
+            if isinstance(model, dict):
+                model = model.get("model")
+            if model and not found[role]:
+                found[role] = str(model)
+
     for record in records:
-        if record.get("kind") != "run_meta":
-            continue
-        models = record.get("models")
-        if isinstance(models, dict):
-            return {
-                "attacker": str(models.get("attacker") or ""),
-                "target": str(models.get("target") or ""),
-                "judge": str(models.get("judge") or ""),
-                "recorded": True,
-            }
-    return {"attacker": "", "target": "", "judge": "", "recorded": False}
+        merge(record.get("models"))
+        merge(record.get("agent_roles"))
+        for role in found:
+            model = record.get(f"{role}_model")
+            if model and not found[role]:
+                found[role] = str(model)
+
+        request = record.get("request") if isinstance(record.get("request"), dict) else {}
+        endpoint = request.get("endpoint") if isinstance(request.get("endpoint"), dict) else {}
+        if not endpoint and isinstance(record.get("endpoint"), dict):
+            endpoint = record["endpoint"]
+        name = str(endpoint.get("name") or "").lower()
+        model = endpoint.get("model")
+        role = next((item for item in found if item in name), "")
+        if role and model and not found[role]:
+            found[role] = str(model)
+
+    return {**found, "recorded": any(found.values())}
+
+
+def _models_for_finding(record: dict, run_models: dict) -> dict:
+    """Prefer model attribution recorded on the finding over run-level defaults."""
+    models = {role: str(run_models.get(role) or "") for role in ("attacker", "target", "judge")}
+    explicit = record.get("models") if isinstance(record.get("models"), dict) else {}
+    for role in models:
+        value = record.get(f"{role}_model") or explicit.get(role)
+        if isinstance(value, dict):
+            value = value.get("model")
+        if value:
+            models[role] = str(value)
+    return {**models, "recorded": any(models.values())}
 
 
 def _safe_run_path(sessions: Path, name: str) -> Path | None:
@@ -317,7 +339,7 @@ def _findings_for_run(path: Path) -> list[dict]:
         finding["line"] = line_number
         finding["record_index"] = index
         finding["raw"] = raw_line
-        finding["models"] = models
+        finding["models"] = _models_for_finding(record, models)
         finding["conversation"] = _conversation_for_finding(records, index, record)
         finding["technique_detail"] = _template_for_finding(records, index, record)
         finding["judging"] = _judging_for_finding(record)
@@ -445,50 +467,60 @@ def _agent_settings(prefs: dict | None = None) -> dict:
             1,
             32000,
         ),
+        "concurrency": _int_setting(
+            prefs.get("agent_concurrency"),
+            3,
+            1,
+            32,
+        ),
+        "request_delay_ms": _int_setting(
+            prefs.get("agent_request_delay_ms"),
+            250,
+            0,
+            60000,
+        ),
     }
 
 
-def _bool_setting(value, default: bool = False) -> bool:
-    if value is None:
-        return default
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, str):
-        return value.strip().lower() in ("1", "true", "yes", "on")
-    return bool(value)
-
-
-def _advanced_settings(config, prefs: dict | None = None) -> dict:
+def _target_settings(config, prefs: dict | None = None) -> dict:
     prefs = prefs or {}
+    target = getattr(config, "target", None) if config is not None else None
+    mode = str(prefs.get("target_modality", "auto")).lower()
+    if mode not in ("auto", "text", "image"):
+        mode = "auto"
+    system_mode = str(
+        prefs.get("target_system_mode", getattr(target, "system_mode", "default"))
+    ).lower()
+    if system_mode not in ("default", "merge", "drop"):
+        system_mode = "default"
+    providers = prefs.get("target_provider")
+    if providers is None:
+        providers = list(getattr(target, "provider", ()) or ())
     return {
-        "runtime": {
-            "auto": _bool_setting(prefs.get("auto"), False),
-            "rounds": _int_setting(prefs.get("rounds"), 12, 1, 50),
-            "no_tools": _bool_setting(prefs.get("no_tools"), False),
-            "exit_on_finish": _bool_setting(prefs.get("exit_on_finish"), True),
-            "log": _bool_setting(prefs.get("log"), True),
-            "judge": _bool_setting(prefs.get("judge"), False),
-            "resume": str(prefs.get("resume", "")),
-        },
+        "modality": mode,
+        "system_mode": system_mode,
+        "provider": ", ".join(_list_arg(providers)),
+        "judge_enabled": bool(prefs.get("judge", True)),
     }
 
 
-def _store_advanced_settings(prefs: dict, advanced: dict) -> None:
-    runtime = advanced.get("runtime") if isinstance(advanced.get("runtime"), dict) else {}
-    if "auto" in runtime:
-        prefs["auto"] = _bool_setting(runtime.get("auto"), False)
-    if "rounds" in runtime:
-        prefs["rounds"] = _int_setting(runtime.get("rounds"), 12, 1, 50)
-    if "no_tools" in runtime:
-        prefs["no_tools"] = _bool_setting(runtime.get("no_tools"), False)
-    if "exit_on_finish" in runtime:
-        prefs["exit_on_finish"] = _bool_setting(runtime.get("exit_on_finish"), True)
-    if "log" in runtime:
-        prefs["log"] = _bool_setting(runtime.get("log"), True)
-    if "judge" in runtime:
-        prefs["judge"] = _bool_setting(runtime.get("judge"), False)
-    if "resume" in runtime:
-        prefs["resume"] = str(runtime.get("resume") or "")
+def _apply_target_settings(run_config, prefs: dict | None = None, source_config=None):
+    """Apply dashboard target controls to a per-run resolved config."""
+    if run_config is None or run_config.target is None:
+        return run_config
+    from ..config import resolve_target_modality
+
+    settings = _target_settings(source_config or run_config, prefs)
+    explicit = settings["modality"] if settings["modality"] != "auto" else None
+    target = dataclasses.replace(
+        run_config.target,
+        modality=resolve_target_modality(run_config.target.model, explicit),
+        system_mode=settings["system_mode"],
+        provider=tuple(_list_arg(settings["provider"])),
+    )
+    configured = dataclasses.replace(run_config, target=target)
+    configured.judge_enabled = settings["judge_enabled"]
+    return configured
 
 def _compose_attack_payload(body: dict) -> dict:
     request = str(body.get("request") or body.get("prompt") or "").strip()
@@ -550,8 +582,7 @@ def _settings_view(config, prefs: dict | None = None) -> dict:
         return {"profiles": [], "default_profile": None, "attacker_model": None,
                 "target": None, "judge_model": None, "agent": agent,
                 "profile_details": {},
-                "advanced": _advanced_settings(None, prefs),
-                "typical_configurations": TYPICAL_CONFIGURATIONS}
+                "target_options": _target_settings(None, prefs)}
     display_config = config
     role_view = {}
     try:
@@ -593,8 +624,7 @@ def _settings_view(config, prefs: dict | None = None) -> dict:
         "judge_model": getattr(judge, "model", None) if judge else None,
         "judge_profile": role_view.get("judge", {}).get("provider"),
         "agent": agent,
-        "advanced": _advanced_settings(config, prefs),
-        "typical_configurations": TYPICAL_CONFIGURATIONS,
+        "target_options": _target_settings(config, prefs),
     }
 
 
@@ -707,14 +737,21 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
                 "research_profile", "research_model",
                 "research_agent_max_rounds", "research_agent_max_tokens",
                 "profile", "target_profile", "judge_profile",
-                "target_provider", "target_modality",
             }
             obsolete_keys.update(
                 f"{prefix}_{field}" for prefix in _ENDPOINT_PREFIXES for field in _ENDPOINT_FIELDS
             )
+            # These are current run-scoped target controls, not legacy endpoint copies.
+            obsolete_keys.difference_update({
+                "target_provider", "target_modality", "target_system_mode",
+            })
             if obsolete_keys.intersection(prefs):
                 prefs = {key: value for key, value in prefs.items() if key not in obsolete_keys}
                 save_state(state_path, prefs)
+            from ..providers.request_gate import configure_request_gate
+
+            gate = _agent_settings(prefs)
+            configure_request_gate(gate["concurrency"], gate["request_delay_ms"])
         except Exception:
             pass
     app = FastAPI(title="Wallbreaker", version="0.1.0")
@@ -956,18 +993,32 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
             prefs["agent_max_tokens"] = _int_setting(agent.get("agent_max_tokens"), 8192, 1, 32000)
         if "max_tokens" in agent:
             prefs["agent_max_tokens"] = _int_setting(agent.get("max_tokens"), 8192, 1, 32000)
-        if isinstance(body.get("advanced"), dict):
-            _store_advanced_settings(prefs, body["advanced"])
-        if body.get("typical_configuration"):
-            preset_id = str(body.get("typical_configuration"))
-            preset = next((item for item in TYPICAL_CONFIGURATIONS if item["id"] == preset_id), None)
-            if preset is None:
-                raise HTTPException(status_code=400, detail=f"unknown configuration '{preset_id}'")
-            prefs["agent_max_rounds"] = preset["agent"]["max_rounds"]
-            prefs["agent_max_tokens"] = preset["agent"]["max_tokens"]
-            _store_advanced_settings(prefs, preset["advanced"])
-
+        if "concurrency" in agent:
+            prefs["agent_concurrency"] = _int_setting(agent.get("concurrency"), 3, 1, 32)
+        if "request_delay_ms" in agent:
+            prefs["agent_request_delay_ms"] = _int_setting(
+                agent.get("request_delay_ms"), 250, 0, 60000
+            )
+        if isinstance(body.get("target_options"), dict):
+            target_options = body["target_options"]
+            modality = str(target_options.get("modality", "auto")).lower()
+            if modality not in ("auto", "text", "image"):
+                raise HTTPException(status_code=400, detail="target modality must be auto, text, or image")
+            system_mode = str(target_options.get("system_mode", "default")).lower()
+            if system_mode not in ("default", "merge", "drop"):
+                raise HTTPException(status_code=400, detail="target system mode must be default, merge, or drop")
+            prefs["target_modality"] = modality
+            prefs["target_system_mode"] = system_mode
+            prefs["target_provider"] = _list_arg(target_options.get("provider"))
+            if "judge_enabled" in target_options:
+                if not isinstance(target_options["judge_enabled"], bool):
+                    raise HTTPException(status_code=400, detail="judge_enabled must be a boolean")
+                prefs["judge"] = target_options["judge_enabled"]
         save_state(state_path_for(config), prefs)
+        from ..providers.request_gate import configure_request_gate
+
+        gate = _agent_settings(prefs)
+        configure_request_gate(gate["concurrency"], gate["request_delay_ms"])
         return _settings_view(config, prefs)
 
     @app.get("/api/overview")
@@ -1071,7 +1122,10 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
 
     @app.get("/api/presets")
     def presets():
-        return [{"name": p.name, "description": p.description} for p in list_presets()]
+        return [
+            {"name": p.name, "description": p.description, "template": p.template}
+            for p in list_presets()
+        ]
 
     @app.get("/api/transforms")
     def transforms():
@@ -1093,12 +1147,21 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
             from ..tools import build_registry
 
             reg = build_registry(config)
-            return [{"name": s["name"], "description": s["description"]} for s in reg.specs()]
+            return [
+                {
+                    "name": spec["name"],
+                    "description": spec["description"],
+                    "parameters": spec.get("parameters", {}),
+                    "control": spec["name"] in _AGENT_CONTROL_TOOLS,
+                }
+                for spec in reg.specs()
+            ]
         except Exception:
             return []
 
     dashboard_inference_lock = asyncio.Lock()
     agent_active = False
+    agent_control = None
 
     @app.post("/api/compose")
     def compose(body: dict):
@@ -1132,7 +1195,11 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
         from ..session import inference_logging
 
         try:
+            from ..state import load_state, state_path_for
+
+            prefs = load_state(state_path_for(config))
             run_config, role_meta = resolved_config(config)
+            run_config = _apply_target_settings(run_config, prefs, config)
         except Exception as exc:
             from ..config import ConfigError
             if isinstance(exc, ConfigError):
@@ -1184,16 +1251,116 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
             "run_log": console_runlog.path.name,
         }
 
+    def _agent_status_view():
+        if not agent_active or agent_control is None:
+            return {"active": False, "paused": False, "attacker": "", "provider": ""}
+        endpoint = agent_control["provider"].endpoint
+        return {
+            "active": True,
+            "paused": bool(agent_control["paused"]),
+            "pause_ready": bool(agent_control.get("pause_ready")),
+            "attacker": endpoint.model,
+            "provider": str(agent_control.get("provider_name") or ""),
+            "objective": str(agent_control.get("objective") or ""),
+        }
+
+    @app.get("/api/agent/status")
+    async def agent_status():
+        return _agent_status_view()
+
+    def _active_control():
+        if not agent_active or agent_control is None:
+            raise HTTPException(status_code=409, detail="no agent run is active")
+        return agent_control
+
+    @app.post("/api/agent/steer")
+    async def agent_steer(body: dict):
+        control = _active_control()
+        message = str(body.get("message") or "").strip()
+        if not message:
+            raise HTTPException(status_code=400, detail="steering message is required")
+        control["feedback"].append(message)
+        control["runlog"].event("operator_feedback_queued", text=message)
+        control["push"]({"type": "steer_queued", "text": message})
+        return {"ok": True, "queued": len(control["feedback"])}
+
+    @app.post("/api/agent/pause")
+    async def agent_pause():
+        control = _active_control()
+        control["paused"] = True
+        control["pause_ready"] = False
+        control["resume_event"].clear()
+        control["runlog"].event("agent_paused")
+        control["push"]({
+            "type": "control", "state": "pausing",
+            "message": "Pause requested; the current response will finish before the next attacker turn waits.",
+        })
+        return _agent_status_view()
+
+    @app.post("/api/agent/resume")
+    async def agent_resume():
+        control = _active_control()
+        control["paused"] = False
+        control["pause_ready"] = False
+        control["resume_event"].set()
+        control["runlog"].event("agent_resumed")
+        control["push"]({"type": "control", "state": "running", "message": "Run resumed."})
+        return _agent_status_view()
+
+    @app.post("/api/agent/attacker")
+    async def agent_attacker_switch(body: dict):
+        control = _active_control()
+        if not control.get("pause_ready"):
+            raise HTTPException(status_code=409, detail="wait until the run reaches the paused boundary before switching the attacker")
+        if agent_profile_registry is None or config is None:
+            raise HTTPException(status_code=400, detail="no config loaded")
+        try:
+            from ..agent_profiles import resolved_config
+            from ..providers.factory import build_provider
+            from ..state import load_state, state_path_for
+
+            assignment = agent_profile_registry.activate("attacker", body)
+            next_config, _ = resolved_config(config)
+            next_config = _apply_target_settings(
+                next_config, load_state(state_path_for(config)), config
+            )
+            next_brain = next_config.profile()
+            next_provider = build_provider(next_brain)
+        except Exception as exc:
+            from ..config import ConfigError
+            if isinstance(exc, ConfigError):
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
+            raise
+        control["provider"].switch(next_provider, next_brain)
+        control["provider_name"] = assignment.get("provider", "")
+        control["registry"].ctx.config = next_config
+        control["runlog"].event(
+            "attacker_switched",
+            model=next_brain.model,
+            provider=assignment.get("provider", ""),
+            profile=assignment.get("profile", ""),
+        )
+        control["push"]({
+            "type": "control", "state": "paused", "message": "Attacker switched.",
+            "attacker": next_brain.model, "provider": assignment.get("provider", ""),
+        })
+        return _agent_status_view()
+
     @app.post("/api/agent/run")
     async def agent_run(body: dict):
-        nonlocal agent_active
+        nonlocal agent_active, agent_control
         from fastapi.responses import StreamingResponse
 
         if config is None:
             raise HTTPException(status_code=400, detail="no [target] configured in config.toml")
+        prefs = {}
         try:
             from ..agent_profiles import resolved_config
+            from ..state import load_state, state_path_for
+
+            prefs = load_state(state_path_for(config))
             run_config, role_meta = resolved_config(config)
+            run_config = _apply_target_settings(run_config, prefs, config)
             brain = run_config.profile()
         except Exception as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -1206,16 +1373,16 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
             raise HTTPException(status_code=409, detail="an agent run is already in progress")
         if dashboard_inference_lock.locked():
             raise HTTPException(status_code=409, detail="another dashboard inference is already in progress")
-        prefs = {}
-        try:
-            from ..state import load_state, state_path_for
-
-            prefs = load_state(state_path_for(config))
-        except Exception:
-            prefs = {}
         agent_defaults = _agent_settings(prefs)
         max_rounds = _int_setting(body.get("max_rounds"), agent_defaults["max_rounds"], 1, 50)
         max_tokens = _int_setting(body.get("max_tokens"), agent_defaults["max_tokens"], 1, 32000)
+        concurrency = _int_setting(body.get("concurrency"), agent_defaults["concurrency"], 1, 32)
+        request_delay_ms = _int_setting(
+            body.get("request_delay_ms"), agent_defaults["request_delay_ms"], 0, 60000
+        )
+        from ..providers.request_gate import configure_request_gate
+
+        configure_request_gate(concurrency, request_delay_ms)
 
         from ..agent.loop import AgentEvents, run_autonomous
         from ..agent.messages import user
@@ -1224,18 +1391,44 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
         from ..session import RunLog, run_models_meta
         from ..tools import build_registry
 
-        provider = build_provider(brain)
+        base_provider = build_provider(brain)
         registry = build_registry(run_config)
+        enabled_raw = body.get("enabled_techniques")
+        if enabled_raw is not None:
+            if not isinstance(enabled_raw, list) or not all(isinstance(name, str) for name in enabled_raw):
+                raise HTTPException(status_code=400, detail="enabled_techniques must be a list of tool names")
+            known = set(registry.names()) - _AGENT_CONTROL_TOOLS
+            requested = set(enabled_raw)
+            unknown = sorted(requested - known)
+            if unknown:
+                raise HTTPException(status_code=400, detail=f"unknown techniques: {', '.join(unknown)}")
+            keep = requested | _AGENT_CONTROL_TOOLS
+            registry.tools = {name: tool for name, tool in registry.tools.items() if name in keep}
+        enabled_techniques = [
+            name for name in registry.names() if name not in _AGENT_CONTROL_TOOLS
+        ]
+        resume_event = asyncio.Event()
+        resume_event.set()
+        provider = _LiveAttackerProvider(base_provider, brain, compose_system)
         runlog = RunLog(directory=str(sessions))
         runlog.set_run_meta(
             source="dashboard_agent",
             models=run_models_meta(run_config, attacker=brain),
             agent_roles=role_meta,
-            agent={"max_rounds": max_rounds, "max_tokens": max_tokens},
+            agent={
+                "max_rounds": max_rounds,
+                "max_tokens": max_tokens,
+                "concurrency": concurrency,
+                "request_delay_ms": request_delay_ms,
+                "enabled_techniques": enabled_techniques,
+            },
         )
         queue: asyncio.Queue = asyncio.Queue()
+        stream_attached = True
 
         def push(ev) -> None:
+            if not stream_attached:
+                return
             try:
                 queue.put_nowait(ev)
             except Exception:
@@ -1286,7 +1479,10 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
 
         registry.ctx.progress = progress
         registry.ctx.run_events = tool_run_event
-        registry.ctx.record = lambda p, r, lbl, rs, t: runlog.verdict(p, r, lbl, rs, t)
+        registry.ctx.record = lambda p, r, lbl, rs, t: runlog.verdict(
+            p, r, lbl, rs, t,
+            target_model=getattr(run_config.target, "model", "") if run_config.target else "",
+        )
 
         events = AgentEvents(
             on_text=lambda t: push({"type": "text", "text": t}),
@@ -1302,8 +1498,44 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
         history = [user(objective)]
         runlog.event("objective", text=objective)
 
+        feedback_queue: list[str] = []
+
+        def drain_feedback() -> list[str]:
+            queued = feedback_queue[:]
+            feedback_queue.clear()
+            return queued
+
+        agent_control = {
+            "provider": provider,
+            "provider_name": role_meta.get("attacker", {}).get("provider", ""),
+            "registry": registry,
+            "resume_event": resume_event,
+            "paused": False,
+            "pause_ready": False,
+            "feedback": feedback_queue,
+            "runlog": runlog,
+            "push": push,
+            "objective": objective,
+        }
+
+        def mark_pause_ready() -> None:
+            if agent_control is None or agent_control.get("pause_ready"):
+                return
+            agent_control["pause_ready"] = True
+            push({
+                "type": "control", "state": "paused",
+                "message": "Paused. You can switch the attacker or add steering before resuming.",
+            })
+
+        async def pause_checkpoint() -> None:
+            if not resume_event.is_set():
+                mark_pause_ready()
+            await resume_event.wait()
+            if agent_control is not None:
+                agent_control["pause_ready"] = False
+
         async def runner():
-            nonlocal agent_active
+            nonlocal agent_active, agent_control
             from ..session import inference_logging
 
             async with dashboard_inference_lock:
@@ -1312,6 +1544,8 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
                         res = await run_autonomous(
                             provider, registry, history, system=compose_system(brain),
                             events=events, max_rounds=max_rounds, max_tokens=max_tokens,
+                            feedback=drain_feedback,
+                            before_model=pause_checkpoint,
                         )
                     data = res.data or {}
                     summary = data.get("summary") or data.get("question") or ""
@@ -1324,13 +1558,17 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
                     error_event(f"{type(exc).__name__}: {exc}")
                 finally:
                     agent_active = False
+                    resume_event.set()
+                    agent_control = None
                     push(None)
 
         agent_active = True
         task = asyncio.create_task(runner())
 
         async def gen():
+            nonlocal stream_attached
             push({"type": "start", "objective": objective, "brain": getattr(brain, "model", ""),
+                  "provider": role_meta.get("attacker", {}).get("provider", ""),
                   "target": getattr(run_config.target, "model", ""),
                   "max_rounds": max_rounds, "max_tokens": max_tokens,
                   "run_log": runlog.path.name})
@@ -1341,8 +1579,11 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
                         break
                     yield f"data: {json.dumps(ev, ensure_ascii=False)}\n\n"
             finally:
-                if not task.done():
-                    task.cancel()
+                # A browser stop/disconnect must not abandon an inference that the
+                # remote supplier may still count as active.  Detach the UI and let
+                # the runner drain the response; its normal finally block releases
+                # both the provider request slot and dashboard run lock.
+                stream_attached = False
 
         return StreamingResponse(gen(), media_type="text/event-stream", headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 

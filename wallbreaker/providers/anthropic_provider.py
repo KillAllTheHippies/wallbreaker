@@ -18,6 +18,7 @@ from ..agent.messages import (
     UsageEvent,
 )
 from .base import Provider, ProviderError, parse_tool_args
+from .request_gate import gated_stream
 
 ANTHROPIC_VERSION = "2023-06-01"
 
@@ -86,6 +87,26 @@ class AnthropicProvider(Provider):
         return headers
 
     async def stream(
+        self,
+        messages: list[Message],
+        tools: list[dict] | None = None,
+        system: str | None = None,
+        max_tokens: int = 4096,
+        temperature: float | None = None,
+    ) -> AsyncIterator[StreamEvent]:
+        async for event in gated_stream(
+            self.endpoint,
+            lambda: self._stream_ungated(
+                messages,
+                tools=tools,
+                system=system,
+                max_tokens=max_tokens,
+                temperature=temperature,
+            ),
+        ):
+            yield event
+
+    async def _stream_ungated(
         self,
         messages: list[Message],
         tools: list[dict] | None = None,

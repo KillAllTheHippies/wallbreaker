@@ -17,6 +17,41 @@ from .agent.messages import (
     user,
 )
 
+INFERENCE_ACTION_KINDS = {"attack", "target", "judge", "scaffold", "art", "vision"}
+
+
+def inference_action_kind(endpoint, operation: str = "completion") -> str:
+    """Name a model call after the scaffold component carrying it out."""
+    name = (
+        str(endpoint.get("name") or "")
+        if isinstance(endpoint, dict)
+        else str(getattr(endpoint, "name", "") or "")
+    ).casefold()
+    operation = str(operation or "completion").casefold()
+    if operation == "agent_turn":
+        return "scaffold"
+    if any(token in name for token in ("target", "victim", "model-under-test")):
+        return "target"
+    if any(token in name for token in ("judge", "grader", "evaluator", "critic")):
+        return "judge"
+    if operation == "image_generation" or any(token in name for token in ("art", "image-gen")):
+        return "art"
+    if operation == "vision_completion" or "vision" in name:
+        return "vision"
+    if any(token in name for token in ("attack", "brain", "redteam", "red-team")):
+        return "attack"
+    return "scaffold"
+
+
+def inference_action_name(operation: str) -> str:
+    operation = str(operation or "completion")
+    return {
+        "agent_turn": "plan_and_route",
+        "completion": "complete",
+        "image_generation": "generate_image",
+        "vision_completion": "inspect_image",
+    }.get(operation, operation)
+
 
 def _block_to_dict(block) -> dict:
     if isinstance(block, TextBlock):
@@ -76,7 +111,8 @@ def load_run_log(path: str | Path) -> tuple[list[Message], dict]:
     compact = normalize_inference_records(records)
     agent_inference_ids.update(
         row.get("inference_id") for row in compact
-        if row.get("kind") == "inference" and row.get("operation") == "agent_turn"
+        if row.get("kind") in INFERENCE_ACTION_KINDS
+        and row.get("operation") == "agent_turn"
     )
     has_explicit_assistant = any(row.get("kind") == "assistant" for row in records)
     history: list[Message] = []
@@ -88,7 +124,7 @@ def load_run_log(path: str | Path) -> tuple[list[Message], dict]:
             text = r.get("text", "")
             if text.strip():
                 history.append(assistant(text))
-        elif kind == "inference" and not has_explicit_assistant and r.get("inference_id") in agent_inference_ids:
+        elif kind in INFERENCE_ACTION_KINDS and not has_explicit_assistant and r.get("inference_id") in agent_inference_ids:
             text = str(r.get("text") or "")
             if text.strip():
                 history.append(assistant(text))
@@ -310,12 +346,15 @@ class RunLog:
         if not self.enabled:
             return
         self._ensure()
+        endpoint_record = self._endpoint_record(endpoint)
         self._inference_buffers[inference_id] = {
             "ts": datetime.now().isoformat(timespec="seconds"),
+            "kind": inference_action_kind(endpoint_record, operation),
             "inference_id": inference_id,
             "operation": operation,
+            "action": inference_action_name(operation),
             "request": {
-                "endpoint": self._endpoint_record(endpoint),
+                "endpoint": endpoint_record,
                 "messages": [
                 self._json_value(message) if isinstance(message, dict)
                 else self._message_record(message)
@@ -334,7 +373,8 @@ class RunLog:
         self._ensure()
         buf = self._inference_buffers.setdefault(inference_id, {
             "ts": datetime.now().isoformat(timespec="seconds"),
-            "inference_id": inference_id, "operation": "completion",
+            "kind": "scaffold", "inference_id": inference_id,
+            "operation": "completion", "action": "complete",
             "request": {}, "stream": [], "stream_metadata": [],
             "stream_event_counts": {},
         })
@@ -367,7 +407,12 @@ class RunLog:
         buf.setdefault("stream_event_counts", {})
         buf["text"] = "".join(part["text"] for part in stream if part["channel"] == "text")
         buf["reasoning"] = "".join(part["text"] for part in stream if part["channel"] == "reasoning")
-        self._write({"ts": buf.pop("ts", datetime.now().isoformat(timespec="seconds")), "kind": "inference", **buf})
+        kind = str(buf.pop("kind", "scaffold"))
+        self._write({
+            "ts": buf.pop("ts", datetime.now().isoformat(timespec="seconds")),
+            "kind": kind,
+            **buf,
+        })
 
     def flush_inferences(self, inference_id: str | None = None) -> None:
         if not self.enabled:
@@ -410,16 +455,20 @@ class RunLog:
         self.event("tool_result", tool=name, error=is_error, content=content)
 
     def verdict(
-        self, payload: str, response: str, label: str, reason: str, technique: str = ""
+        self, payload: str, response: str, label: str, reason: str, technique: str = "",
+        *, target_model: str = "",
     ) -> None:
-        self.event(
-            "verdict", payload=payload, response=response, label=label,
-            reason=reason, technique=technique or "manual",
-        )
+        data = {
+            "payload": payload, "response": response, "label": label,
+            "reason": reason, "technique": technique or "manual",
+        }
+        if target_model:
+            data["target_model"] = target_model
+        self.event("verdict", **data)
 
 
 def normalize_inference_records(records: list[dict], line_numbers: list[int] | None = None) -> list[dict]:
-    """Group legacy request/event/response rows into readable inference records."""
+    """Group legacy trace rows and label them by meaningful scaffold action."""
     lines = line_numbers or list(range(1, len(records) + 1))
     out: list[dict] = []
     pending: dict[str, dict] = {}
@@ -431,7 +480,11 @@ def normalize_inference_records(records: list[dict], line_numbers: list[int] | N
         response = response or {}
         stream = item.get("stream", [])
         item.update({k: v for k, v in response.items() if k not in ("stream_events", "kind")})
-        item["kind"] = "inference"
+        item["kind"] = inference_action_kind(
+            item.get("request", {}).get("endpoint", {}),
+            item.get("operation", "completion"),
+        )
+        item["action"] = inference_action_name(item.get("operation", "completion"))
         item["stream"] = stream
         item.setdefault("status", "incomplete")
         item["text"] = "".join(s["text"] for s in stream if s.get("channel") == "text")
@@ -443,16 +496,26 @@ def normalize_inference_records(records: list[dict], line_numbers: list[int] | N
         kind = row.get("kind")
         ident = row.get("inference_id")
         if kind == "inference_request" and ident:
+            operation = row.get("operation", "completion")
+            endpoint = row.get("endpoint", {})
             pending[ident] = {
-                "ts": row.get("ts"), "kind": "inference", "inference_id": ident,
-                "operation": row.get("operation", "completion"),
+                "ts": row.get("ts"),
+                "kind": inference_action_kind(endpoint, operation),
+                "inference_id": ident,
+                "operation": operation,
+                "action": inference_action_name(operation),
                 "request": {k: row.get(k) for k in ("endpoint", "messages", "system", "tools", "parameters") if k in row},
                 "stream": [], "stream_metadata": [], "stream_event_counts": {},
                 "_source_lines": [lines[index]],
             }
             continue
         if kind == "inference_event" and ident:
-            item = pending.setdefault(ident, {"kind": "inference", "inference_id": ident, "request": {}, "stream": [], "stream_metadata": [], "stream_event_counts": {}, "_source_lines": []})
+            item = pending.setdefault(ident, {
+                "kind": "scaffold", "inference_id": ident,
+                "operation": "completion", "action": "complete", "request": {},
+                "stream": [], "stream_metadata": [], "stream_event_counts": {},
+                "_source_lines": [],
+            })
             item["_source_lines"].append(lines[index])
             event = row.get("event") or {}
             event_type = event.get("type", "unknown") if isinstance(event, dict) else "unknown"
@@ -474,6 +537,13 @@ def normalize_inference_records(records: list[dict], line_numbers: list[int] | N
                 item["_source_lines"].append(lines[index])
             flush(ident, row)
             continue
+        if kind == "inference":
+            row = dict(row)
+            row["kind"] = inference_action_kind(
+                row.get("request", {}).get("endpoint", {}),
+                row.get("operation", "completion"),
+            )
+            row.setdefault("action", inference_action_name(row.get("operation", "completion")))
         out.append(row)
     for ident in list(pending):
         flush(ident)

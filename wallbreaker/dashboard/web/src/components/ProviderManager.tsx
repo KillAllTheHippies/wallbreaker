@@ -111,6 +111,9 @@ export function ProviderManager({ onChanged }: { onChanged: () => void }) {
           <label>Key environment variable<input value={String(form.api_key_env || "")} placeholder="PROVIDER_API_KEY" onChange={(e) => update("api_key_env", e.target.value)} /></label>
           <label>API key<input type="password" value={String(form.api_key || "")} placeholder={form.has_api_key ? "Stored; enter to replace" : "Stored locally in .env"} onChange={(e) => update("api_key", e.target.value)} /></label>
           <label>Authentication<select value={String(form.auth_style || "bearer")} onChange={(e) => update("auth_style", e.target.value)}><option value="bearer">Bearer token</option><option value="x-api-key">x-api-key</option></select></label>
+          <label>Default modality<select value={String(form.modality || "text")} onChange={(e) => update("modality", e.target.value)}><option value="text">Text</option><option value="image">Image generation</option></select></label>
+          <label>Request timeout (seconds)<input type="number" min={0} step={1} value={Number(form.timeout || 0)} onChange={(e) => update("timeout", Number(e.target.value))} /></label>
+          <label className="toggle-field"><input type="checkbox" checked={Boolean(form.reasoning)} onChange={(e) => update("reasoning", e.target.checked)} /><span>Request reasoning output</span></label>
           <label>Inference path<input value={String(form.inference_path || "")} placeholder="Protocol default" onChange={(e) => update("inference_path", e.target.value)} /></label>
           <label>Models path<input value={String(form.models_path || "")} placeholder="Protocol default" onChange={(e) => update("models_path", e.target.value)} /></label>
         </div>

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { api, type RoleAssignments } from "../api";
 import { ProviderManager } from "./ProviderManager";
 import { RoleChooser } from "./RoleChooser";
+import { TargetOptions } from "./TargetOptions";
 
 export function Settings({ onSaved }: { onSaved?: () => void }) {
   const [revision, setRevision] = useState(0);
@@ -14,7 +15,7 @@ export function Settings({ onSaved }: { onSaved?: () => void }) {
     </div>
     <div className="card settings-wide muted" style={{ fontSize: 12 }}>
       Provider connections own URLs, credentials, protocols, and model directories. Assign providers to attacker,
-      target, and judge agents from the Profiles page; runtime controls are on the Advanced page.
+      target, and judge agents below or create reusable assignments on the Profiles page.
     </div>
     <div className="card settings-wide">
       <h3>Active agents</h3>
@@ -23,5 +24,6 @@ export function Settings({ onSaved }: { onSaved?: () => void }) {
       </div>
       <div className="muted" style={{ fontSize: 12, marginTop: 12 }}>Quickly apply a named profile or a Custom provider/model assignment. Create and edit named profiles on the Profiles page.</div>
     </div>
+    <div className="card settings-wide"><TargetOptions /></div>
   </div>;
 }

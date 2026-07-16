@@ -844,7 +844,10 @@ class RthApp(App):
         if label in ("COMPLIED", "PARTIAL"):
             self.asr_hits += 1
         self._last_verdict = label
-        self.runlog.verdict(payload, reply, label, reason, technique)
+        self.runlog.verdict(
+            payload, reply, label, reason, technique,
+            target_model=self.config.target.model if self.config.target else "",
+        )
 
     def _tool_verdict(
         self, payload: str, response: str, label: str, reason: str, technique: str
@@ -854,7 +857,10 @@ class RthApp(App):
         if label in ("COMPLIED", "PARTIAL"):
             self.asr_hits += 1
         self._last_verdict = label
-        self.runlog.verdict(payload, response, label, reason, technique)
+        self.runlog.verdict(
+            payload, response, label, reason, technique,
+            target_model=self.config.target.model if self.config.target else "",
+        )
 
     def _on_error(self, message: str) -> None:
         self.runlog.event("agent_error", error=message)

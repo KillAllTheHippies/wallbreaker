@@ -13,6 +13,9 @@ def _sessions(tmp_path):
     sessions.mkdir()
     log = sessions / "run-20260101-000000.jsonl"
     rows = [
+        {"kind": "run_meta", "models": {
+            "attacker": "attacker-per-run", "target": "target-per-run", "judge": "judge-per-run",
+        }},
         {"kind": "verdict", "label": "COMPLIED", "technique": "godmode_hybrid",
          "payload": "do x", "reason": "full operational detail"},
         {"kind": "verdict", "label": "REFUSED", "technique": "raw",
@@ -38,12 +41,16 @@ def test_findings_runs_arsenal(tmp_path):
     assert len(findings) == 1 and findings[0]["label"] == "COMPLIED"
     assert findings[0]["run"] == "run-20260101-000000.jsonl"
     assert findings[0]["run_time"] == "2026-01-01 00:00:00"
+    assert findings[0]["models"]["target"] == "target-per-run"
     assert findings[0]["conversation"]
     runs = client.get("/api/runs").json()
     assert runs and runs[0]["name"] == "run-20260101-000000.jsonl"
     assert runs[0]["hits"] == 1
+    assert runs[0]["models"]["target"] == "target-per-run"
     presets = client.get("/api/presets").json()
     assert any(p["name"] == "variable_z" for p in presets)
+    assert all(p["template"] for p in presets)
+    assert all("{request}" in p["template"] for p in presets)
     transforms = client.get("/api/transforms").json()
     assert any(t["name"] == "control_char_flood" for t in transforms)
 
@@ -72,6 +79,7 @@ def test_findings_can_select_multiple_past_runs(tmp_path):
                 "response": "older response",
                 "reason": "partial detail",
                 "technique": "query_target",
+                "target_model": "older-target-model",
             }),
         ]),
         encoding="utf-8",
@@ -94,6 +102,7 @@ def test_findings_can_select_multiple_past_runs(tmp_path):
     }
     older_finding = next(f for f in findings if f["run"] == "run-20251231-235959.jsonl")
     assert older_finding["run_time"] == "2025-12-31 23:59:59"
+    assert older_finding["models"]["target"] == "older-target-model"
     assert older_finding["technique_detail"]["transforms"]["prompt"] == ["base64"]
     assert [turn["role"] for turn in older_finding["conversation"]] == ["user", "assistant"]
     assert older_finding["judging"]["criteria"]
@@ -102,7 +111,7 @@ def test_findings_can_select_multiple_past_runs(tmp_path):
 def test_run_detail_path_guard(tmp_path):
     client = TestClient(create_app(config=None, sessions_dir=_sessions(tmp_path)))
     ok = client.get("/api/runs/run-20260101-000000.jsonl")
-    assert ok.status_code == 200 and ok.json()["total"] == 2
+    assert ok.status_code == 200 and ok.json()["total"] == 3
     bad = client.get("/api/runs/..%2f..%2fetc%2fpasswd")
     assert bad.status_code == 404
 
@@ -181,22 +190,17 @@ def test_fire_records_full_console_attempt(monkeypatch, tmp_path):
     assert fired[0]["payload"] == "aGVsbG8="
     assert fired[0]["response"] == "[target fake]\nREFUSED: nope"
     assert fired[0]["target_model"] == "target-model"
-    request = next(record for record in records if record.get("kind") == "inference_request")
-    response = next(record for record in records if record.get("kind") == "inference_response")
+    response = next(record for record in records if record.get("kind") == "target")
+    request = response["request"]
+    assert response["action"] == "complete"
     assert request["messages"][0]["content"][0]["text"] == "hello"
     assert request["parameters"]["max_tokens"] == 1024
     assert response["text"] == "[target fake]\nREFUSED: nope"
     assert response["reasoning"] == "full target reasoning"
     assert response["usage_events"] == [{"input_tokens": 17, "output_tokens": 9}]
     assert response["stop_reasons"] == ["end_turn"]
-    streamed = [
-        record["event"] for record in records
-        if record.get("kind") == "inference_event"
-        and record.get("inference_id") == response["inference_id"]
-    ]
-    assert [event["type"] for event in streamed] == [
-        "reasoning_delta", "text_delta", "usage", "stop",
-    ]
+    assert [part["channel"] for part in response["stream"]] == ["reasoning", "text"]
+    assert [event["type"] for event in response["stream_metadata"]] == ["usage", "stop"]
 
 
 def test_agent_run_logs_full_scaffold_inference_and_tools(monkeypatch, tmp_path):
@@ -254,11 +258,12 @@ def test_agent_run_logs_full_scaffold_inference_and_tools(monkeypatch, tmp_path)
     log = next(sessions.glob("run-*.jsonl"))
     records = [json.loads(line) for line in log.read_text(encoding="utf-8").splitlines()]
     assert next(row for row in records if row["kind"] == "run_meta")["source"] == "dashboard_agent"
-    request = next(row for row in records if row["kind"] == "inference_request")
-    response_record = next(row for row in records if row["kind"] == "inference_response")
+    response_record = next(row for row in records if row["kind"] == "scaffold")
+    request = response_record["request"]
     tool_call = next(row for row in records if row["kind"] == "tool_call")
     tool_result = next(row for row in records if row["kind"] == "tool_result")
 
+    assert response_record["action"] == "plan_and_route"
     assert request["system"]
     assert request["messages"][0]["content"][0]["text"] == "full objective text"
     assert request["tools"][0]["description"].startswith("Finish the autonomous")
@@ -267,13 +272,9 @@ def test_agent_run_logs_full_scaffold_inference_and_tools(monkeypatch, tmp_path)
     assert response_record["reasoning"] == "private attacker reasoning"
     assert response_record["usage_events"] == [{"input_tokens": 101, "output_tokens": 37}]
     assert response_record["stop_reasons"] == ["tool_use"]
-    streamed = [
-        row["event"] for row in records
-        if row.get("kind") == "inference_event"
-        and row.get("inference_id") == response_record["inference_id"]
-    ]
-    assert [event["type"] for event in streamed] == [
-        "reasoning_delta", "text_delta", "tool_use", "usage", "stop",
+    assert [part["channel"] for part in response_record["stream"]] == ["reasoning", "text"]
+    assert [event["type"] for event in response_record["stream_metadata"]] == [
+        "tool_use", "usage", "stop",
     ]
     assert tool_call["args"] == {"summary": "complete summary text"}
     assert tool_result["content"] == "finish accepted: complete summary text"
@@ -312,8 +313,12 @@ def test_settings_get_and_set(tmp_path):
     assert g["target"]["model"] == "some/text-model"
     assert g["agent"]["max_rounds"] == 8
     assert g["agent"]["max_tokens"] == 8192
-    assert len(g["typical_configurations"]) >= 3
-    assert g["advanced"]["runtime"]["rounds"] == 12
+    assert g["agent"]["concurrency"] == 3
+    assert g["agent"]["request_delay_ms"] == 250
+    assert g["target_options"] == {
+        "modality": "auto", "system_mode": "default", "provider": "",
+        "judge_enabled": True,
+    }
 
     r = client.post("/api/settings", json={"target_model": "google/gemini-3-pro-image", "target_modality": "auto"})
     assert r.status_code == 200
@@ -325,29 +330,44 @@ def test_settings_get_and_set(tmp_path):
     # Role choices resolve per run and never mutate the provider/global config.
     assert cfg.target.modality == "text"
 
-    r3 = client.post("/api/settings", json={"agent": {"max_rounds": 18, "max_tokens": 12000}})
-    assert r3.json()["agent"] == {"max_rounds": 18, "max_tokens": 12000}
+    r3 = client.post("/api/settings", json={"agent": {
+        "max_rounds": 18, "max_tokens": 12000,
+        "concurrency": 5, "request_delay_ms": 75,
+    }})
+    assert r3.json()["agent"] == {
+        "max_rounds": 18, "max_tokens": 12000,
+        "concurrency": 5, "request_delay_ms": 75,
+    }
 
     low_tokens = client.post("/api/settings", json={"agent": {"max_tokens": 7}})
     assert low_tokens.json()["agent"]["max_tokens"] == 7
 
-    r4 = client.post("/api/settings", json={
-        "advanced": {
-            "runtime": {"rounds": 16, "auto": True, "log": True},
-            "target": {"base_url": "https://target.example/v1", "timeout": 45, "provider": "WandB,Alibaba"},
-            "judge": {"reasoning": True},
-        }
-    })
-    assert r4.json()["advanced"]["runtime"]["rounds"] == 16
-    # Obsolete endpoint override bodies are ignored; provider connections remain canonical.
-    assert cfg.target.base_url == "http://x"
-    assert cfg.target.timeout == 0
-    assert cfg.target.provider == ()
-    assert "target" not in r4.json()["advanced"]
+    r4 = client.post("/api/settings", json={"target_options": {
+        "modality": "image", "system_mode": "merge", "provider": "WandB, Alibaba",
+        "judge_enabled": False,
+    }})
+    assert r4.json()["target_options"] == {
+        "modality": "image", "system_mode": "merge", "provider": "WandB, Alibaba",
+        "judge_enabled": False,
+    }
 
-    r5 = client.post("/api/settings", json={"typical_configuration": "fast_triage"})
-    assert r5.json()["agent"] == {"max_rounds": 4, "max_tokens": 4096}
-    assert r5.json()["advanced"]["runtime"]["rounds"] == 4
+    from wallbreaker.agent_profiles import resolved_config
+    from wallbreaker.dashboard.server import _apply_target_settings
+    from wallbreaker.state import load_state, state_path_for
+
+    run_config, _ = resolved_config(cfg)
+    applied = _apply_target_settings(run_config, load_state(state_path_for(cfg)))
+    assert applied.target.modality == "image"
+    assert applied.target.system_mode == "merge"
+    assert applied.target.provider == ("WandB", "Alibaba")
+    assert applied.judge_enabled is False
+
+    from wallbreaker.tools import build_registry
+    assert build_registry(applied).ctx.judge_endpoint is None
+    # Dashboard target controls are run-scoped and do not mutate provider records.
+    assert cfg.target.system_mode == "default"
+    assert cfg.target.provider == ()
+
 
 
 def test_models_fetches_catalog_for_profile(monkeypatch, tmp_path):

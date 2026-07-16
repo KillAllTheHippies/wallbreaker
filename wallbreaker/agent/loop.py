@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import dataclasses
 import time
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 
 from ..providers.base import Provider, ProviderError
@@ -99,12 +99,18 @@ async def run_turn(
     max_tokens: int = 8192,
     stop_tools: set[str] | None = None,
     feedback: Callable[[], list[str]] | None = None,
+    before_model: Callable[[], Awaitable[None]] | None = None,
 ) -> TurnResult:
     events = events or AgentEvents()
     specs = registry.specs() if registry and registry.names() else None
     last: Message | None = None
 
     for iteration in range(1, max_iters + 1):
+        # Host-controlled pause gates belong immediately before the model request.
+        # Feedback is drained after the gate opens so steering typed while paused
+        # lands on the very first resumed turn.
+        if before_model:
+            await before_model()
         # drain operator steering BEFORE each model call so advice lands on the very next
         # turn (mid-round), not only at the round boundary.
         if feedback:
@@ -267,6 +273,7 @@ async def run_autonomous(
     max_rounds: int = 12,
     max_tokens: int = 8192,
     feedback: Callable[[], list[str]] | None = None,
+    before_model: Callable[[], Awaitable[None]] | None = None,
 ) -> AutoResult:
     events = events or AgentEvents()
     idle_streak = 0
@@ -297,6 +304,7 @@ async def run_autonomous(
             max_tokens=max_tokens,
             stop_tools=STOP_TOOLS,
             feedback=feedback,  # steering now lands mid-round, between model turns
+            before_model=before_model,
         )
 
         if result.stop_tool == "finish":

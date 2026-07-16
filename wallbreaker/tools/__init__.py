@@ -5,8 +5,8 @@ from .registry import Tool, ToolContext, ToolRegistry
 
 
 def build_registry(config: Config, cwd: str | None = None) -> ToolRegistry:
-    judge_endpoint = config.judge
-    if judge_endpoint is None:
+    judge_endpoint = config.judge if getattr(config, "judge_enabled", True) else None
+    if judge_endpoint is None and getattr(config, "judge_enabled", True):
         try:
             judge_endpoint = config.profile()
         except Exception:

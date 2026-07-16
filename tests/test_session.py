@@ -25,6 +25,13 @@ def test_runlog_disabled_writes_nothing(tmp_path):
     assert not log.path.exists()
 
 
+def test_runlog_verdict_records_target_model(tmp_path):
+    log = RunLog(directory=tmp_path)
+    log.verdict("payload", "response", "COMPLIED", "reason", target_model="target-per-fire")
+    record = json.loads(log.path.read_text(encoding="utf-8").strip())
+    assert record["target_model"] == "target-per-fire"
+
+
 def test_runlog_writes_pending_run_metadata_on_first_event(tmp_path):
     log = RunLog(directory=tmp_path)
     log.set_run_meta(models={

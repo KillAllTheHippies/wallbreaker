@@ -7,7 +7,7 @@ import {
 } from "react";
 import { api, verdictKind, type Finding, type RunModels, type RunSummary } from "../api";
 
-type FindingColumnId = "time" | "run" | "verdict" | "technique" | "category" | "payload" | "reason";
+type FindingColumnId = "time" | "run" | "target" | "verdict" | "technique" | "category" | "payload" | "reason";
 
 interface ColumnState {
   id: FindingColumnId;
@@ -19,6 +19,7 @@ interface ColumnState {
 const DEFAULT_COLUMNS: ColumnState[] = [
   { id: "time", label: "time", width: 170, minWidth: 130 },
   { id: "run", label: "run", width: 220, minWidth: 150 },
+  { id: "target", label: "target model", width: 240, minWidth: 160 },
   { id: "verdict", label: "verdict", width: 120, minWidth: 100 },
   { id: "technique", label: "technique", width: 170, minWidth: 120 },
   { id: "category", label: "category", width: 150, minWidth: 110 },
@@ -241,6 +242,10 @@ export function Findings() {
       }
       case "run":
         return <td key={column.id} className="mono clip" title={finding.run}>{finding.run || "latest"}</td>;
+      case "target": {
+        const target = finding.models?.target || textValue(finding.target_model) || "not recorded";
+        return <td key={column.id} className="mono clip" title={target}>{target}</td>;
+      }
       case "verdict":
         return (
           <td key={column.id}>
@@ -311,6 +316,7 @@ export function Findings() {
               >
                 <span className="mono">{run.name}</span>
                 <span className="muted mono">{run.time || "unknown time"}</span>
+                <span className="muted mono">target: {run.models?.target || "not recorded"}</span>
                 <span className={`badge ${count ? "bypass" : "neutral"}`}>{count} finding{count === 1 ? "" : "s"}</span>
                 <span className="muted mono">{run.records} records | {fmtBytes(run.size)}</span>
               </button>

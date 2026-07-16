@@ -11,6 +11,7 @@ import httpx
 from ..agent.messages import Message, StopEvent, StreamEvent, TextDelta
 from ..config import Endpoint
 from .base import Provider, ProviderError
+from .request_gate import gated_request
 from .openai_provider import _messages_to_wire
 
 _MIME_EXT = {
@@ -164,24 +165,29 @@ class OpenRouterImageProvider(Provider):
         )
         started = time.monotonic()
         try:
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
-                resp = await client.post(url, headers=headers, json=payload)
-                if resp.status_code >= 400:
-                    raise ProviderError(
-                        f"HTTP {resp.status_code} from {url}: {resp.text[:400]}"
-                    )
-                data = resp.json()
-                from ..model_catalog import record_model_success
+            async def send():
+                async with httpx.AsyncClient(
+                    timeout=self.timeout, follow_redirects=True
+                ) as client:
+                    resp = await client.post(url, headers=headers, json=payload)
+                    if resp.status_code >= 400:
+                        raise ProviderError(
+                            f"HTTP {resp.status_code} from {url}: {resp.text[:400]}"
+                        )
+                    return resp.json(), resp.status_code
 
-                record_model_success(self.endpoint)
-                trace_inference_response(
-                    inference_id,
-                    status="ok",
-                    raw_response=data,
-                    http_status=resp.status_code,
-                    duration_ms=round((time.monotonic() - started) * 1000, 3),
-                )
-                return data
+            data, http_status = await gated_request(self.endpoint, send)
+            from ..model_catalog import record_model_success
+
+            record_model_success(self.endpoint)
+            trace_inference_response(
+                inference_id,
+                status="ok",
+                raw_response=data,
+                http_status=http_status,
+                duration_ms=round((time.monotonic() - started) * 1000, 3),
+            )
+            return data
         except Exception as exc:
             trace_inference_response(
                 inference_id,
@@ -324,11 +330,16 @@ async def vision_complete(
     )
     started = time.monotonic()
     try:
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            resp = await client.post(url, headers=headers, json=payload)
-            if resp.status_code >= 400:
-                raise ProviderError(f"HTTP {resp.status_code} from {url}: {resp.text[:400]}")
-            data = resp.json()
+        async def send():
+            async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
+                resp = await client.post(url, headers=headers, json=payload)
+                if resp.status_code >= 400:
+                    raise ProviderError(
+                        f"HTTP {resp.status_code} from {url}: {resp.text[:400]}"
+                    )
+                return resp.json()
+
+        data = await gated_request(endpoint, send)
     except Exception as exc:
         trace_inference_response(
             inference_id,

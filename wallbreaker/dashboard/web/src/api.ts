@@ -112,8 +112,7 @@ export interface Settings {
   judge_model: string | null;
   judge_profile?: string | null;
   agent?: AgentConfig;
-  advanced?: AdvancedSettings;
-  typical_configurations?: TypicalConfiguration[];
+  target_options?: TargetOptions;
 }
 
 export interface ProfileDetail {
@@ -157,34 +156,15 @@ export type RoleAssignments = Record<"attacker" | "target" | "judge", RoleChoice
 export interface AgentConfig {
   max_rounds: number;
   max_tokens: number;
+  concurrency: number;
+  request_delay_ms: number;
 }
 
-export interface RuntimeAdvancedSettings {
-  auto: boolean;
-  rounds: number;
-  no_tools: boolean;
-  exit_on_finish: boolean;
-  log: boolean;
-  judge: boolean;
-  resume: string;
-}
-
-export interface EndpointAdvancedSettings {
-  protocol: string;
-  base_url: string;
-  model: string;
-  api_key_env: string;
+export interface TargetOptions {
+  modality: "auto" | "text" | "image";
+  system_mode: "default" | "merge" | "drop";
   provider: string;
-  timeout: number;
-  modality: string;
-  reasoning: boolean;
-  system_mode: string;
-  system_prompt_file: string;
-  auth_style: string;
-}
-
-export interface AdvancedSettings {
-  runtime: RuntimeAdvancedSettings;
+  judge_enabled: boolean;
 }
 
 export type AgentRole = "attacker" | "target" | "judge";
@@ -200,17 +180,23 @@ export interface AgentProfile {
 export interface AgentProfileRoleData { active: RoleChoice; profiles: AgentProfile[] }
 export interface AgentProfilesResponse { roles: Record<AgentRole, AgentProfileRoleData> }
 
-export interface TypicalConfiguration {
-  id: string;
+export interface Preset { name: string; description: string; template: string }
+export interface Transform { name: string; description: string; lossy: boolean; reversible: boolean }
+export interface Tool {
   name: string;
   description: string;
-  agent: AgentConfig;
-  advanced: Partial<AdvancedSettings>;
+  parameters?: Record<string, unknown>;
+  control?: boolean;
 }
 
-export interface Preset { name: string; description: string }
-export interface Transform { name: string; description: string; lossy: boolean; reversible: boolean }
-export interface Tool { name: string; description: string }
+export interface AgentControlStatus {
+  active: boolean;
+  paused: boolean;
+  pause_ready?: boolean;
+  attacker: string;
+  provider: string;
+  objective?: string;
+}
 
 export interface ComposeResult {
   request: string;
@@ -296,6 +282,16 @@ export const api = {
   presets: () => j<Preset[]>("/api/presets"),
   transforms: () => j<Transform[]>("/api/transforms"),
   tools: () => j<Tool[]>("/api/tools"),
+  agentStatus: () => j<AgentControlStatus>("/api/agent/status"),
+  steerAgent: (message: string) => j<{ ok: boolean; queued: number }>("/api/agent/steer", {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message }),
+  }),
+  pauseAgent: () => j<AgentControlStatus>("/api/agent/pause", { method: "POST" }),
+  resumeAgent: () => j<AgentControlStatus>("/api/agent/resume", { method: "POST" }),
+  switchAgentAttacker: (body: { profile?: string; provider?: string; model?: string }) =>
+    j<AgentControlStatus>("/api/agent/attacker", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+    }),
   compose: (body: Record<string, unknown>) =>
     j<ComposeResult>("/api/compose", {
       method: "POST",
@@ -311,13 +307,13 @@ export const api = {
 };
 
 export interface AgentEvent {
-  type: "start" | "round" | "text" | "tool_start" | "tool_result" | "progress" | "feedback" | "usage" | "error" | "done";
+  type: "start" | "round" | "text" | "tool_start" | "tool_result" | "progress" | "feedback" | "usage" | "error" | "done" | "control" | "steer_queued";
   run_log?: string;
   [k: string]: unknown;
 }
 
 export async function runAgent(
-  body: { objective: string; max_rounds?: number; max_tokens?: number },
+  body: { objective: string; max_rounds?: number; max_tokens?: number; concurrency?: number; request_delay_ms?: number; enabled_techniques?: string[] },
   onEvent: (ev: AgentEvent) => void,
   signal?: AbortSignal
 ): Promise<void> {
