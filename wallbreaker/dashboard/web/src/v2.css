@@ -302,9 +302,9 @@
 .v2-result-stack .v2-verdict { margin: 0 10px 8px; }
 
 .v2-capability-list, .v2-library-list, .v2-finding-list, .v2-run-list { max-height: calc(100vh - 230px); overflow: auto; }
-.v2-capability-list button, .v2-library-list button, .v2-finding-list button, .v2-run-list button { display: grid; width: 100%; min-width: 0; gap: 4px; padding: 10px 12px; border: 0; border-bottom: 1px solid var(--v2-line-soft); background: transparent; text-align: left; }
-.v2-capability-list button:hover, .v2-library-list button:hover, .v2-finding-list button:hover, .v2-run-list button:hover { background: #131416; }
-.v2-capability-list button.active, .v2-library-list button.active, .v2-finding-list button.active, .v2-run-list button.active { box-shadow: inset 3px 0 var(--v2-teal); background: #10201e; }
+.v2-capability-list > button, .v2-library-list > button, .v2-finding-list > button, .v2-run-list > button { display: grid; width: 100%; min-width: 0; gap: 4px; padding: 10px 12px; border: 0; border-bottom: 1px solid var(--v2-line-soft); background: transparent; text-align: left; }
+.v2-capability-list > button:hover, .v2-library-list > button:hover, .v2-finding-list > button:hover, .v2-run-list > button:hover { background: #131416; }
+.v2-capability-list > button.active, .v2-library-list > button.active, .v2-finding-list > button.active, .v2-run-list > button.active { box-shadow: inset 3px 0 var(--v2-teal); background: #10201e; }
 .v2-capability-list strong, .v2-library-list strong, .v2-finding-list strong, .v2-run-list strong { overflow: hidden; color: var(--v2-text); font-size: 11px; font-weight: 550; text-overflow: ellipsis; white-space: nowrap; }
 .v2-capability-list span, .v2-library-list span, .v2-finding-list span, .v2-run-list span { color: var(--v2-muted); font-size: 10px; }
 .v2-capability-list small, .v2-library-list small, .v2-finding-list small, .v2-run-list small { color: var(--v2-dim); font-family: var(--v2-mono); font-size: 9px; }
@@ -315,6 +315,21 @@
 .v2-kind-tool { color: var(--v2-amber) !important; }
 .v2-finding-list button > div { display: flex; align-items: center; gap: 8px; }
 .v2-finding-list button strong { white-space: normal; }
+.v2-bookmark-row { position: relative; min-width: 0; border-bottom: 1px solid var(--v2-line-soft); }
+.v2-bookmark-row > .v2-row-select { display: grid; width: 100%; min-width: 0; gap: 4px; padding: 10px 42px 10px 12px; border: 0; background: transparent; text-align: left; }
+.v2-bookmark-row:hover { background: #131416; }
+.v2-bookmark-row.active { box-shadow: inset 3px 0 var(--v2-teal); background: #10201e; }
+.v2-bookmark-row strong { overflow: hidden; color: var(--v2-text); font-size: 11px; font-weight: 550; text-overflow: ellipsis; white-space: nowrap; }
+.v2-bookmark-row span { color: var(--v2-muted); font-size: 10px; }
+.v2-bookmark-row small { color: var(--v2-dim); font-family: var(--v2-mono); font-size: 9px; }
+.v2-finding-list .v2-row-select > div { display: flex; align-items: center; gap: 8px; }
+.v2-finding-list .v2-row-select strong { white-space: normal; }
+.v2-bookmark-button { display: inline-grid; width: 28px; height: 28px; flex: 0 0 28px; place-items: center; padding: 0; border: 1px solid transparent; border-radius: 4px; background: transparent; color: var(--v2-dim); cursor: pointer; font-size: 15px; line-height: 1; }
+.v2-bookmark-button:hover { border-color: var(--v2-line); background: var(--v2-surface-raised); color: var(--v2-amber); }
+.v2-bookmark-button.active { color: var(--v2-amber); }
+.v2-bookmark-button:disabled { cursor: wait; opacity: .55; }
+.v2-bookmark-row > .v2-bookmark-button { position: absolute; top: 50%; right: 8px; transform: translateY(-50%); }
+.v2-button.active { border-color: var(--v2-amber); color: var(--v2-amber); }
 
 .v2-metric-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
 .v2-metric-grid article { display: grid; gap: 7px; padding: 16px; border: 1px solid var(--v2-line); border-radius: 5px; background: var(--v2-bg-soft); }
@@ -495,6 +510,8 @@
 .v2-history-events > button:hover, .v2-history-events > button.active { background: var(--v2-surface-raised); }
 .v2-history-events > button > span:first-child { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .v2-history-events > button > span:nth-child(2), .v2-history-events small { color: var(--v2-muted); font: 10px var(--v2-mono); }
+.v2-history-events .v2-row-select > span:first-child { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.v2-history-events .v2-row-select > span:nth-child(2), .v2-history-events .v2-row-select small { color: var(--v2-muted); font: 10px var(--v2-mono); }
 .v2-history-inspector { min-width: 0; max-height: 580px; overflow: auto; padding: 12px; }
 .v2-runs-explorer { height: 100%; grid-template-columns: minmax(230px, .58fr) minmax(560px, 1.42fr); align-content: stretch; overflow: hidden; }
 .v2-runs-explorer > .v2-panel { display: flex; min-height: 0; flex-direction: column; }
@@ -526,6 +543,7 @@
 .v2-full-stream time { color: var(--v2-dim); font: 8px var(--v2-mono); }
 .v2-full-stream article > div > strong { color: var(--v2-text); font-size: 9px; text-transform: uppercase; }
 .v2-full-stream article > div > span:not(.v2-verdict) { padding: 2px 5px; border: 1px solid var(--v2-line-soft); border-radius: 3px; color: var(--v2-muted); font: 8px var(--v2-mono); }
+.v2-full-stream article > div > .v2-bookmark-button { margin-left: auto; }
 .v2-full-stream pre { margin: 8px 0 0; color: #c9c2bf; font: 10px/1.55 var(--v2-mono); white-space: pre-wrap; overflow-wrap: anywhere; }
 .v2-log-timeline { min-height: 0; flex: 1; border: 0; }
 .v2-log-timeline .v2-history-events, .v2-log-timeline .v2-history-inspector { max-height: none; }

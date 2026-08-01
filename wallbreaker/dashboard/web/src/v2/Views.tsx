@@ -7,6 +7,7 @@ import { EmptyState, ErrorBanner, JsonBlock, LoadingState, Panel, StatusBadge, V
 import { WorkflowStudio } from "./WorkflowStudio";
 import { RunsExplorer } from "./RunsExplorer";
 import { ReportsDashboard } from "./ReportsDashboard";
+import { BookmarkButton, bookmarkId, useBookmarks } from "./Bookmarks";
 import type {
   ArsenalItem,
   Capability,
@@ -19,6 +20,10 @@ import type {
 
 function errorMessage(reason: unknown): string {
   return reason instanceof Error ? reason.message : "Unexpected request failure";
+}
+
+function findingBookmarkKey(item: FindingRecord): string {
+  return String(item.id || `${item.run || "unknown"}:${item.line || item.ts || item.technique || "finding"}`);
 }
 
 function useArsenal() {
@@ -130,6 +135,8 @@ export function FindingsView() {
   const [query, setQuery] = useState("");
   const [verdict, setVerdict] = useState("all");
   const [selected, setSelected] = useState<FindingRecord | null>(null);
+  const [bookmarkedOnly, setBookmarkedOnly] = useState(false);
+  const bookmarks = useBookmarks();
   useEffect(() => {
     setError("");
     v2Api.findingRuns().then((runs) => {
@@ -142,13 +149,19 @@ export function FindingsView() {
   }, []);
   if (!findings) return <LoadingState label="Loading findings" />;
   const verdicts = [...new Set(findings.map((item) => item.label).filter(Boolean) as string[])];
-  const filtered = findings.filter((item) => (verdict === "all" || item.label === verdict) && (!query || `${item.technique || ""} ${item.reason || ""} ${item.response || ""} ${item.run || ""}`.toLowerCase().includes(query.toLowerCase())));
+  const filtered = findings.filter((item) => (!bookmarkedOnly || bookmarks.isBookmarked("finding", findingBookmarkKey(item))) && (verdict === "all" || item.label === verdict) && (!query || `${item.technique || ""} ${item.reason || ""} ${item.response || ""} ${item.run || ""}`.toLowerCase().includes(query.toLowerCase())));
   return <div className="v2-page v2-library-grid">
     <Panel title="Findings" meta={`${filtered.length} evidence records`}>
       {error && <ErrorBanner message={error} onDismiss={() => setError("")} />}
-      <div className="v2-filterbar"><input aria-label="Search findings" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search evidence, technique, run" /><select aria-label="Finding verdict" value={verdict} onChange={(event) => setVerdict(event.target.value)}><option value="all">All verdicts</option>{verdicts.map((value) => <option key={value}>{value}</option>)}</select></div>
+      <div className="v2-filterbar"><input aria-label="Search findings" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search evidence, technique, run" /><select aria-label="Finding verdict" value={verdict} onChange={(event) => setVerdict(event.target.value)}><option value="all">All verdicts</option>{verdicts.map((value) => <option key={value}>{value}</option>)}</select><button type="button" className={`v2-button v2-button-small ${bookmarkedOnly ? "active" : ""}`} aria-pressed={bookmarkedOnly} onClick={() => setBookmarkedOnly((current) => !current)}>★ Bookmarked</button></div>
+      {bookmarks.error && <ErrorBanner message={bookmarks.error} />}
       {!filtered.length && <EmptyState title="No findings match" detail={findings.length ? "Clear filters to see other evidence." : "No findings have been recorded yet."} />}
-      <div className="v2-finding-list">{filtered.map((item, index) => <button type="button" className={selected === item ? "active" : ""} key={item.id || `${item.run}-${index}`} onClick={() => setSelected(item)}><div><VerdictBadge verdict={item.label} /><span>{item.technique || "Unclassified"}</span></div><strong>{item.reason || item.response || "Recorded finding"}</strong><small>{item.run || "Unknown run"}{item.ts ? ` / ${item.ts}` : ""}</small></button>)}</div>
+      <div className="v2-finding-list">{filtered.map((item) => {
+        const key = findingBookmarkKey(item);
+        const label = String(item.reason || item.response || item.technique || "Recorded finding");
+        const target = { kind: "finding" as const, key, label, run_name: item.run };
+        return <div className={`v2-bookmark-row ${selected === item ? "active" : ""}`} key={key}><button type="button" className="v2-row-select" onClick={() => setSelected(item)}><div><VerdictBadge verdict={item.label} /><span>{item.technique || "Unclassified"}</span></div><strong>{label}</strong><small>{item.run || "Unknown run"}{item.ts ? ` / ${item.ts}` : ""}</small></button><BookmarkButton active={bookmarks.isBookmarked("finding", key)} busy={bookmarks.busy === bookmarkId(target)} label={label} onClick={() => void bookmarks.toggle(target)} /></div>;
+      })}</div>
     </Panel>
     <Panel title="Finding inspector" meta={selected?.id || selected?.run}>{selected ? <JsonBlock value={selected} /> : <EmptyState title="Select a finding" detail="The complete evidence record, judging, and conversation will appear here." />}</Panel>
   </div>;

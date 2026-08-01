@@ -1,6 +1,7 @@
 import type {
   ApiResult,
   ArsenalItem,
+  BookmarkRecord,
   Capability,
   ComposePayload,
   ComposeResult,
@@ -298,6 +299,8 @@ export const v2Api = {
     return request<{ items: HistoryEvent[]; total: number; limit: number; offset: number }>(`/api/v2/history/events?${query.toString()}`);
   },
   rebuildHistory: () => request<Record<string, unknown>>("/api/v2/history/rebuild", { method: "POST" }),
+  bookmarks: () => request<{ items: BookmarkRecord[] }>("/api/v2/bookmarks"),
+  toggleBookmark: (bookmark: BookmarkRecord) => request<{ bookmarked: boolean; item: BookmarkRecord; items: BookmarkRecord[] }>("/api/v2/bookmarks/toggle", json(bookmark)),
   report: (runName: string) => request<Record<string, unknown>>(`/api/v2/reports/${encodeURIComponent(runName)}`),
 };
 

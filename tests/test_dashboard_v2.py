@@ -117,6 +117,37 @@ def test_v2_history_search_and_rebuild(tmp_path):
         assert "must-not-leak" not in payload["items"][0]["structured_json"]
 
 
+def test_v2_bookmarks_toggle_and_persist_separately_from_history(tmp_path):
+    bookmark = {
+        "kind": "event",
+        "key": "run-20260801-120000.jsonl:7",
+        "label": "Judge verdict",
+        "run_name": "run-20260801-120000.jsonl",
+        "source_line": 7,
+    }
+    with TestClient(create_app(config=None, sessions_dir=tmp_path)) as client:
+        created = client.post("/api/v2/bookmarks/toggle", json=bookmark)
+        assert created.status_code == 200
+        assert created.json()["bookmarked"] is True
+        assert client.get("/api/v2/bookmarks").json()["items"][0]["key"] == bookmark["key"]
+
+    assert not list(tmp_path.glob("run-*.jsonl"))
+    with TestClient(create_app(config=None, sessions_dir=tmp_path)) as client:
+        assert client.get("/api/v2/bookmarks").json()["items"][0]["source_line"] == 7
+        removed = client.post("/api/v2/bookmarks/toggle", json=bookmark)
+        assert removed.json()["bookmarked"] is False
+        assert client.get("/api/v2/bookmarks").json() == {"items": []}
+
+
+def test_v2_bookmarks_reject_invalid_kind(tmp_path):
+    with TestClient(create_app(config=None, sessions_dir=tmp_path)) as client:
+        response = client.post(
+            "/api/v2/bookmarks/toggle",
+            json={"kind": "credential", "key": "not-allowed"},
+        )
+        assert response.status_code == 400
+
+
 def test_v2_report_uses_canonical_run_log(tmp_path):
     run = tmp_path / "run-20260801-120000.jsonl"
     run.write_text(

@@ -27,6 +27,8 @@ _ENDPOINT_FIELDS = (
     "inference_path", "models_path",
 )
 _AGENT_CONTROL_TOOLS = {"finish", "ask_operator"}
+_BOOKMARK_KINDS = {"run", "event", "finding"}
+_BOOKMARKS_FILE = ".wallbreaker_bookmarks.json"
 
 
 class _LiveAttackerProvider:
@@ -127,6 +129,32 @@ def _safe_run_path(sessions: Path, name: str) -> Path | None:
         if jsonl_path.is_file():
             return jsonl_path
     return None
+
+
+def _load_bookmarks(sessions: Path) -> list[dict]:
+    path = sessions / _BOOKMARKS_FILE
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        return []
+    items = payload.get("items", []) if isinstance(payload, dict) else []
+    return [item for item in items if (
+        isinstance(item, dict)
+        and item.get("kind") in _BOOKMARK_KINDS
+        and isinstance(item.get("key"), str)
+        and item["key"]
+    )]
+
+
+def _save_bookmarks(sessions: Path, items: list[dict]) -> None:
+    sessions.mkdir(parents=True, exist_ok=True)
+    path = sessions / _BOOKMARKS_FILE
+    temporary = path.with_suffix(".tmp")
+    temporary.write_text(
+        json.dumps({"version": 1, "items": items}, indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+    temporary.replace(path)
 
 
 def _load_records_with_lines(path: Path) -> tuple[list[dict], list[str], list[int]]:
@@ -2209,6 +2237,36 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
     @app.get("/api/v2/history/status")
     async def history_status():
         return history_index.status()
+
+    @app.get("/api/v2/bookmarks")
+    async def bookmarks():
+        return {"items": _load_bookmarks(sessions)}
+
+    @app.post("/api/v2/bookmarks/toggle")
+    async def toggle_bookmark(body: dict):
+        kind = str(body.get("kind") or "").strip().lower()
+        key = str(body.get("key") or "").strip()
+        if kind not in _BOOKMARK_KINDS:
+            raise HTTPException(status_code=400, detail="bookmark kind must be run, event, or finding")
+        if not key or len(key) > 500 or any(ord(char) < 32 for char in key):
+            raise HTTPException(status_code=400, detail="bookmark key is invalid")
+        items = _load_bookmarks(sessions)
+        existing = next((item for item in items if item["kind"] == kind and item["key"] == key), None)
+        if existing is not None:
+            items.remove(existing)
+            _save_bookmarks(sessions, items)
+            return {"bookmarked": False, "item": existing, "items": items}
+        item = {
+            "kind": kind,
+            "key": key,
+            "label": str(body.get("label") or "")[:500],
+            "run_name": str(body.get("run_name") or "")[:500],
+            "source_line": body.get("source_line"),
+            "created_at": datetime.now().astimezone().isoformat(timespec="seconds"),
+        }
+        items.append(item)
+        _save_bookmarks(sessions, items)
+        return {"bookmarked": True, "item": item, "items": items}
 
     @app.post("/api/v2/history/rebuild")
     async def history_rebuild():

@@ -149,6 +149,17 @@ export interface FindingRecord {
   [key: string]: unknown;
 }
 
+export type BookmarkKind = "run" | "event" | "finding";
+
+export interface BookmarkRecord {
+  kind: BookmarkKind;
+  key: string;
+  label?: string;
+  run_name?: string;
+  source_line?: number;
+  created_at?: string;
+}
+
 export interface ArsenalItem {
   name: string;
   description?: string;
