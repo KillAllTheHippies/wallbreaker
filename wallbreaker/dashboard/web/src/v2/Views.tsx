@@ -222,5 +222,5 @@ export function SettingsView() {
       <label className="v2-field"><span>Request delay (ms)</span><input type="number" min={0} max={60000} value={agent.request_delay_ms ?? 0} onChange={(event) => setAgent("request_delay_ms", Number(event.target.value))} /></label>
     </div>
     <div className="v2-actions"><button type="button" className="v2-button v2-button-primary" disabled={!settings} onClick={save}>Save defaults</button>{saved && <span className="v2-inline-status" role="status">{saved}</span>}</div>
-  </Panel><Panel title="Target delivery controls" meta="Modality, system handling, backend, and judging"><TargetOptions /></Panel><Panel title="Local operator safeguards"><div className="v2-safeguards"><p><strong>History</strong><span>Canonical JSONL remains unchanged; the V2 index is rebuildable.</span></p><p><strong>Credentials</strong><span>Secret values are never displayed by this surface.</span></p><p><strong>Network exposure</strong><span>Keep the dashboard bound to loopback unless remote access is explicitly intended.</span></p></div></Panel></div>;
+  </Panel><Panel title="Target delivery controls" meta="Modality, system handling, backend, and judging"><TargetOptions /></Panel></div>;
 }
