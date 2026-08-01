@@ -124,22 +124,6 @@ export function WorkflowsView({ capabilities, initialCapability, onConsumed }: {
   return <WorkflowStudio capabilities={capabilities} initialCapability={initialCapability} onConsumed={onConsumed} />;
 }
 
-export function ArsenalView() {
-  const items = useArsenal();
-  const [kind, setKind] = useState<"all" | ArsenalItem["kind"]>("all");
-  const [query, setQuery] = useState("");
-  const [selected, setSelected] = useState<ArsenalItem | null>(null);
-  if (!items) return <LoadingState label="Loading Arsenal" />;
-  const filtered = items.filter((item) => (kind === "all" || item.kind === kind) && (!query || `${item.name} ${item.description || ""}`.toLowerCase().includes(query.toLowerCase())));
-  return <div className="v2-page v2-library-grid">
-    <Panel title="Arsenal" meta={`${filtered.length} items`}>
-      <div className="v2-filterbar"><input aria-label="Search Arsenal" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search names and descriptions" /><select aria-label="Arsenal type" value={kind} onChange={(event) => setKind(event.target.value as typeof kind)}><option value="all">All types</option><option value="preset">Presets</option><option value="transform">Transforms</option><option value="tool">Tools</option></select></div>
-      <div className="v2-library-list">{filtered.map((item) => <button type="button" className={selected?.name === item.name && selected.kind === item.kind ? "active" : ""} key={`${item.kind}-${item.name}`} onClick={() => setSelected(item)}><span className={`v2-kind v2-kind-${item.kind}`}>{item.kind}</span><strong>{item.name}</strong><span>{item.description || "No description provided."}</span></button>)}</div>
-    </Panel>
-    <Panel title={selected?.name || "Item detail"} meta={selected?.kind}>{selected ? <JsonBlock value={selected.detail} /> : <EmptyState title="Choose an Arsenal item" detail="Inspect exact templates, transform metadata, and tool schemas." />}</Panel>
-  </div>;
-}
-
 export function FindingsView() {
   const [findings, setFindings] = useState<FindingRecord[] | null>(null);
   const [error, setError] = useState("");
