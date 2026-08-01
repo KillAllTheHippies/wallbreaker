@@ -315,10 +315,34 @@ Open WebUI V2 at <http://127.0.0.1:8787/v2>. The original dashboard remains avai
 engine as the TUI. For frontend hot-reload, run `npm run dev` in
 `wallbreaker/dashboard/web`; it proxies `/api` to the dashboard backend.
 
-See the [setup guide](docs/SETUP.md) for Windows instructions, provider configuration,
-history storage, development workflow, network-exposure safeguards, and troubleshooting.
-See the [WebUI V2 showcase](docs/WEBUI_V2_SHOWCASE.md) for a visual tour of the unified
-operator surface.
+### Configure providers and models in WebUI V2
+
+1. Open **Models** in the WebUI navigation.
+2. Under **Provider management**, choose **Add provider** and enter a unique name.
+3. Select the provider protocol: **OpenAI compatible**, **Anthropic compatible**, or the
+   keyless local **Claude Code** integration.
+4. Enter the provider's base URL and default model. For compatible services, use the
+   service root expected by that provider; override the inference or models path only when
+   the service does not use the protocol default.
+5. For an API provider, enter the environment-variable name used for its key and provide
+   the key in the password field. Choose the authentication style required by the service:
+   **Bearer token** or **x-api-key**. Credentials are stored locally and are not returned by
+   the dashboard API.
+6. Set modality, reasoning, and timeout options, then choose **Save provider**.
+7. Choose **Verify credentials**. This performs a real authenticated inference and attempts
+   model discovery; a provider is ready only when that verification succeeds.
+8. Under **Attacker, target, and judge profiles**, create or edit the named profiles that
+   assign providers and model IDs to each role. Activate the profiles you want the Agent and
+   Compose workspaces to use.
+
+If model discovery is unavailable, type the exact model ID supplied by the provider. Use
+**Settings** for target delivery options and default run limits. Keep the dashboard bound to
+`127.0.0.1` unless you intentionally enable network access, because it is designed as a local
+single-operator interface.
+
+For complete installation, configuration, storage, development, and troubleshooting details,
+see the [WebUI setup guide](docs/SETUP.md). For a feature-by-feature visual tour, see the
+[WebUI V2 showcase](docs/WEBUI_V2_SHOWCASE.md).
 
 ## Responsible use
 
