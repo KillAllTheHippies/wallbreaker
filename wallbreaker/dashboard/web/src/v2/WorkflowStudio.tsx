@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { v2Api } from "./api";
 import { EmptyState, ErrorBanner, LoadingState, Panel } from "./components";
 import type { Capability, CapabilityProperty, ExecutionSummary, HistoryEvent } from "./types";
+import { ArsenalBrowser } from "../components/Arsenal";
 
 const WORKFLOW_KEY = "wallbreaker.v2.workflows";
 const DRAFT_KEY = "wallbreaker.v2.workflow-draft";
@@ -142,7 +143,7 @@ export function WorkflowStudio({ capabilities, initialCapability, onConsumed }: 
   const [selectedStep, setSelectedStep] = useState("");
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("All");
-  const [tab, setTab] = useState<"build" | "history">("build");
+  const [tab, setTab] = useState<"build" | "history" | "arsenal">("build");
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<ExecutionSummary | null>(null);
   const [error, setError] = useState("");
@@ -249,7 +250,7 @@ export function WorkflowStudio({ capabilities, initialCapability, onConsumed }: 
 
   return <div className="v2-page v2-workflow-studio">
     <div className="v2-studio-toolbar">
-      <div className="v2-segmented" role="tablist"><button type="button" className={tab === "build" ? "active" : ""} onClick={() => setTab("build")}>Build workflow</button><button type="button" className={tab === "history" ? "active" : ""} onClick={() => setTab("history")}>Analyze past run</button></div>
+      <div className="v2-segmented" role="tablist"><button type="button" className={tab === "build" ? "active" : ""} onClick={() => setTab("build")}>Build workflow</button><button type="button" className={tab === "history" ? "active" : ""} onClick={() => setTab("history")}>Analyze past run</button><button type="button" className={tab === "arsenal" ? "active" : ""} onClick={() => setTab("arsenal")}>Arsenal</button></div>
       <span>{draft.steps.length} step{draft.steps.length === 1 ? "" : "s"}{draft.id ? " / saved alias" : " / autosaved draft"}</span>
       <div><button type="button" className="v2-button v2-button-small" onClick={() => { setDraft(emptyDraft()); setSelectedStep(""); setResult(null); }}>New</button><button type="button" className="v2-button v2-button-small" onClick={save}>Save alias</button><button type="button" className="v2-button v2-button-primary v2-button-small" disabled={running || !draft.steps.length} onClick={run}>{running ? "Queuing" : "Run workflow"}</button></div>
     </div>
@@ -270,7 +271,7 @@ export function WorkflowStudio({ capabilities, initialCapability, onConsumed }: 
       <Panel title={activeCapability ? "Configure step" : "Capability palette"} meta={activeCapability?.id || `${filtered.length} executable components`}>
         {activeStep && activeCapability ? <div className="v2-step-editor"><div className="v2-step-editor-head"><button type="button" className="v2-text-button" onClick={() => setSelectedStep("")}>← Add another step</button><strong>{activeCapability.title}</strong><span>{activeCapability.description}</span></div><div className="v2-form-grid"><label className="v2-field v2-field-wide"><span>Step label</span><input value={activeStep.label} onChange={(event) => updateStep({ label: event.target.value })} /></label>{Object.entries(activeCapability.input_schema?.properties || {}).map(([name, property]) => <StepField key={name} name={name} property={property} value={activeStep.args[name]} onChange={(value) => updateStep({ args: { ...activeStep.args, [name]: value } })} />)}{!Object.keys(activeCapability.input_schema?.properties || {}).length && <label className="v2-field v2-field-wide"><span>Arguments JSON</span><textarea value={JSON.stringify(activeStep.args, null, 2)} onChange={(event) => { try { updateStep({ args: JSON.parse(event.target.value) }); } catch { /* retain valid value */ } }} /></label>}<label className="v2-checkbox-field v2-field-wide"><input type="checkbox" checked={activeStep.continue_on_error} onChange={(event) => updateStep({ continue_on_error: event.target.checked })} /><span>Continue to the next step if this step fails</span></label></div></div> : <><div className="v2-filterbar"><input aria-label="Search workflow capabilities" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search steps" /><select value={category} onChange={(event) => setCategory(event.target.value)}>{categories.map((item) => <option key={item}>{item}</option>)}</select></div><div className="v2-step-palette">{filtered.map((capability) => <button type="button" key={capability.id} onClick={() => addStep(capability)}><span>＋</span><strong>{capability.title}</strong><small>{capability.category}</small><p>{capability.description || capability.id}</p></button>)}{!filtered.length && <EmptyState title="No executable steps match" />}</div></>}
       </Panel>
-    </div> : <div className="v2-history-workflow">
+    </div> : tab === "history" ? <div className="v2-history-workflow">
       <Panel title="Past agent runs" meta={`${runs?.length || 0} indexed`}>
         {!runs && <LoadingState label="Loading run history" />}
         <div className="v2-run-list">{(runs || []).map((run) => { const name = String(run.run_name || ""); return <button type="button" key={name} className={historyRun === name ? "active" : ""} onClick={() => setHistoryRun(name)}><strong>{name}</strong><span>{Number(run.event_count || 0)} events</span><small>{String(run.last_timestamp || run.first_timestamp || "")}</small></button>; })}</div>
@@ -293,6 +294,11 @@ export function WorkflowStudio({ capabilities, initialCapability, onConsumed }: 
           </li>;
         })}</ol></>}
       </Panel>
+    </div> : <div className="v2-workflow-arsenal">
+      <Panel title="Arsenal" meta="Presets, transforms, and tools available to workflow steps">
+        <p className="v2-muted">Use the same arsenal browser from this area to inspect reusable building blocks before adding them to a workflow.</p>
+      </Panel>
+      <ArsenalBrowser />
     </div>}
   </div>;
 }

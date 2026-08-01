@@ -5,12 +5,11 @@ import { Overview } from "./components/Overview";
 import { Console } from "./components/Console";
 import { Findings } from "./components/Findings";
 import { Runs } from "./components/Runs";
-import { Arsenal } from "./components/Arsenal";
 import { Settings } from "./components/Settings";
 import { RoleChooser } from "./components/RoleChooser";
 import { Profiles } from "./components/Profiles";
 
-type Tab = "agent" | "overview" | "console" | "findings" | "runs" | "arsenal" | "profiles" | "settings";
+type Tab = "agent" | "overview" | "console" | "findings" | "runs" | "profiles" | "settings";
 
 const NAV: { id: Tab; label: string; short: string }[] = [
   { id: "agent", label: "Agent", short: "AG" },
@@ -18,7 +17,6 @@ const NAV: { id: Tab; label: string; short: string }[] = [
   { id: "console", label: "Attack console", short: "AC" },
   { id: "findings", label: "Findings", short: "FN" },
   { id: "runs", label: "Run logs", short: "RL" },
-  { id: "arsenal", label: "Arsenal", short: "AR" },
   { id: "profiles", label: "Profiles", short: "PR" },
   { id: "settings", label: "Settings", short: "ST" },
 ];
@@ -108,7 +106,6 @@ export function App() {
           {tab === "console" && <Console hasTarget={!!cfg?.has_target} />}
           {tab === "findings" && <Findings />}
           {tab === "runs" && <Runs />}
-          {tab === "arsenal" && <Arsenal />}
           {tab === "settings" && <Settings onSaved={refresh} />}
           {tab === "profiles" && <Profiles onSaved={refresh} />}
         </div>

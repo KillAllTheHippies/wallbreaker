@@ -6,7 +6,6 @@ const ROUTES: Array<{ id: V2Route; label: string; description: string }> = [
   { id: "live", label: "Live", description: "Observe current and historical engagements" },
   { id: "compose", label: "Compose", description: "Build and inspect a payload" },
   { id: "workflows", label: "Workflows", description: "Run any registered capability" },
-  { id: "arsenal", label: "Arsenal", description: "Browse presets, transforms, and tools" },
   { id: "findings", label: "Findings", description: "Investigate recorded evidence" },
   { id: "runs", label: "Runs and Logs", description: "Inspect historical event records" },
   { id: "reports", label: "Reports", description: "Summarize and export evidence" },

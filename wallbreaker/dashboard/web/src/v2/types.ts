@@ -3,7 +3,6 @@ export type V2Route =
   | "live"
   | "compose"
   | "workflows"
-  | "arsenal"
   | "findings"
   | "runs"
   | "reports"

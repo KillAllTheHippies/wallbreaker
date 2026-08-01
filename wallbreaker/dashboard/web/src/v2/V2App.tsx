@@ -6,7 +6,6 @@ import { CommandPalette, ROUTES } from "./CommandPalette";
 import { formatTime, StatusBadge } from "./components";
 import { AgentView, LiveView } from "./LiveView";
 import {
-  ArsenalView,
   ComposeView,
   FindingsView,
   ModelsView,
@@ -149,7 +148,6 @@ export function V2App() {
           <div className={`v2-route-state ${route === "live" ? "active" : ""}`}><LiveView execution={selectedExecution} enabled={route === "live"} /></div>
           <div className={`v2-route-state ${route === "compose" ? "active" : ""}`}><ComposeView /></div>
           <div className={`v2-route-state ${route === "workflows" ? "active" : ""}`}><WorkflowsView capabilities={capabilities} initialCapability={initialCapability} onConsumed={() => setInitialCapability("")} /></div>
-          <div className={`v2-route-state ${route === "arsenal" ? "active" : ""}`}><ArsenalView /></div>
           <div className={`v2-route-state ${route === "findings" ? "active" : ""}`}><FindingsView /></div>
           <div className={`v2-route-state ${route === "runs" ? "active" : ""}`}><RunsView /></div>
           <div className={`v2-route-state ${route === "reports" ? "active" : ""}`}><ReportsView /></div>

@@ -12,7 +12,7 @@ type ArsenalRow = {
   detail: string;
 };
 
-export function Arsenal() {
+export function ArsenalBrowser() {
   const [kind, setKind] = useState<Kind>("presets");
   const [presets, setPresets] = useState<Preset[]>([]);
   const [transforms, setTransforms] = useState<Transform[]>([]);
@@ -130,4 +130,8 @@ export function Arsenal() {
       </aside>
     </div>
   );
+}
+
+export function Arsenal() {
+  return <ArsenalBrowser />;
 }
