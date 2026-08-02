@@ -15,6 +15,7 @@ import type {
   ProviderRecord,
   RunSummary,
   SettingsRecord,
+  JEFBehavior,
 } from "./types";
 import { inferEventActor } from "./eventProjection";
 
@@ -147,6 +148,10 @@ function listPayload(value: unknown, keys: string[]): unknown[] {
 }
 
 export const v2Api = {
+  jefBehaviors: async (): Promise<JEFBehavior[]> => {
+    const body = await request<{ behaviors?: JEFBehavior[] }>("/api/v2/jef/behaviors");
+    return Array.isArray(body.behaviors) ? body.behaviors : [];
+  },
   async capabilities(): Promise<ApiResult<Capability[]>> {
     try {
       const body = await request<unknown>("/api/v2/capabilities");

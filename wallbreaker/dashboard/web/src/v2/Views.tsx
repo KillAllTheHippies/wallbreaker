@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { arsenalItems, v2Api } from "./api";
+import { JEFBehaviorPicker } from "./JEFBehaviorPicker";
 import { Profiles } from "../components/Profiles";
 import { ProviderManager } from "../components/ProviderManager";
 import { TargetOptions } from "../components/TargetOptions";
@@ -44,6 +45,7 @@ export function ComposeView() {
   const [preset, setPreset] = useState("");
   const [selectedTransforms, setSelectedTransforms] = useState<string[]>([]);
   const [system, setSystem] = useState("");
+  const [jefBehavior, setJefBehavior] = useState("");
   const [maxTokens, setMaxTokens] = useState(8192);
   const [result, setResult] = useState<ComposeResult | null>(null);
   const [conversation, setConversation] = useState<ConsoleConversation>({ active: false, turn_count: 0, turns: [], run_log: "" });
@@ -64,6 +66,7 @@ export function ComposeView() {
       transforms: selectedTransforms,
       system: conversation.active ? undefined : system || undefined,
       max_tokens: maxTokens,
+      jef_behavior: jefBehavior || undefined,
     };
     try {
       const next = action === "preview" ? await v2Api.compose(body) : await v2Api.fire(body);
@@ -83,7 +86,7 @@ export function ComposeView() {
     try {
       const next = await v2Api.resetConsoleConversation();
       setConversation(next);
-      setResult(null); setRequest(""); setPreset(""); setSystem(""); setSelectedTransforms([]);
+      setResult(null); setRequest(""); setPreset(""); setSystem(""); setJefBehavior(""); setSelectedTransforms([]);
     } catch (reason) { setError(errorMessage(reason)); }
     finally { setWorking(""); }
   };
@@ -96,6 +99,7 @@ export function ComposeView() {
         <button type="button" className="v2-button" disabled={!conversation.active || !!working} onClick={resetConversation}>Reset &amp; archive</button>
       </div>
       <div className="v2-form-grid">
+        {!conversation.active && <JEFBehaviorPicker value={jefBehavior} onChange={setJefBehavior} />}
         <label className="v2-field v2-field-wide"><span>{conversation.active ? `Follow-up turn ${conversation.turn_count + 1}` : "First turn"}</span><textarea value={request} onChange={(event) => setRequest(event.target.value)} onKeyDown={(event) => { if (event.ctrlKey && event.key === "Enter") void submit("fire"); }} placeholder={conversation.active ? "Continue the same target conversation…  Ctrl Enter sends" : "Enter the authorized evaluation objective or request"} /></label>
         <label className="v2-field"><span>Initial preset</span><select value={preset} disabled={conversation.active} onChange={(event) => setPreset(event.target.value)}><option value="">None</option>{presets.map((item) => <option key={item.name}>{item.name}</option>)}</select><small>{conversation.active ? "Locked until reset" : "Applied to the opening turn"}</small></label>
         <label className="v2-field"><span>Maximum tokens</span><input type="number" min={1} max={64000} value={maxTokens} onChange={(event) => setMaxTokens(Number(event.target.value))} /></label>

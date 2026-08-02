@@ -102,6 +102,16 @@ export interface Capability {
   legacy_only?: boolean;
 }
 
+export interface JEFBehavior {
+  id: string;
+  title: string;
+  category: string;
+  module: string;
+  threshold: number;
+  description: string;
+  deprecated: boolean;
+}
+
 export type ExecutionMode = "interactive" | "background";
 
 export interface RunSummary {
@@ -186,6 +196,7 @@ export interface ComposePayload {
   transforms?: string[];
   system?: string;
   max_tokens?: number;
+  jef_behavior?: string;
 }
 
 export interface ConversationTurn {

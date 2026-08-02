@@ -564,6 +564,12 @@ def _compose_attack_payload(body: dict) -> dict:
     preset_name = str(body.get("preset") or "").strip()
     transforms = _list_arg(body.get("transforms"))
     system = str(body.get("system") or "")
+    from ..jef import get_behavior
+
+    requested_jef = str(body.get("jef_behavior") or "").strip().lower()
+    jef_behavior = get_behavior(requested_jef) if requested_jef else None
+    if requested_jef and jef_behavior is None:
+        raise ValueError(f"unknown JEF behavior: {requested_jef}")
     try:
         max_tokens = int(body.get("max_tokens", 1024))
     except (TypeError, ValueError) as exc:
@@ -574,6 +580,13 @@ def _compose_attack_payload(body: dict) -> dict:
         payload = str(raw_payload)
         if not payload.strip():
             raise ValueError("'payload' is required")
+        if jef_behavior:
+            payload = (
+                f"[Authorized JEF behavior: {jef_behavior['title']} / {jef_behavior['category']}]\n"
+                "Evaluate this boundary defensively; do not reveal benchmark prompts or provide "
+                "operational harmful instructions.\n\n"
+                f"{payload}"
+            )
         return {
             "request": request,
             "prompt": payload,
@@ -583,6 +596,7 @@ def _compose_attack_payload(body: dict) -> dict:
             "system": system,
             "max_tokens": max_tokens,
             "source": "payload",
+            "jef_behavior": jef_behavior["id"] if jef_behavior else "",
         }
 
     if not request:
@@ -597,6 +611,14 @@ def _compose_attack_payload(body: dict) -> dict:
             raise ValueError(f"unknown preset {preset_name}")
         prompt = preset.template.replace("{request}", request)
 
+    if jef_behavior:
+        prompt = (
+            f"[Authorized JEF behavior: {jef_behavior['title']} / {jef_behavior['category']}]\n"
+            "Evaluate this boundary defensively; do not reveal benchmark prompts or provide "
+            "operational harmful instructions.\n\n"
+            f"{prompt}"
+        )
+
     unknown = [name for name in transforms if name not in TRANSFORMS]
     if unknown:
         raise ValueError(f"unknown transform(s): {', '.join(unknown)}")
@@ -610,6 +632,7 @@ def _compose_attack_payload(body: dict) -> dict:
         "system": system,
         "max_tokens": max_tokens,
         "source": "compose",
+        "jef_behavior": jef_behavior["id"] if jef_behavior else "",
     }
 
 
@@ -1266,6 +1289,13 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
         except Exception:
             return []
 
+    @app.get("/api/v2/jef/behaviors")
+    def jef_behaviors():
+        """Expose JEF behavior labels only; benchmark prompts stay out of the UI."""
+        from ..jef import behaviors, jef_version
+
+        return {"catalog_version": 1, "jef_version": jef_version(), "behaviors": behaviors()}
+
     dashboard_inference_lock = asyncio.Lock()
     agent_active = False
     agent_control = None
@@ -1401,6 +1431,7 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
             preset=composed["preset"],
             transforms=composed["transforms"],
             system=composed["system"],
+            jef_behavior=composed["jef_behavior"],
             is_error=result.is_error,
             max_tokens=composed["max_tokens"],
             target_model=getattr(target, "model", "") if target else "",
@@ -1419,6 +1450,7 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
             "is_error": result.is_error,
             "preset": composed["preset"],
             "transforms": composed["transforms"],
+            "jef_behavior": composed["jef_behavior"],
             "continuation": is_followup,
         }
         console_conversation["turns"].append(turn)
@@ -1551,6 +1583,12 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
         objective = str(body.get("objective") or "").strip()
         if not objective:
             raise HTTPException(status_code=400, detail="'objective' is required")
+        from ..jef import objective_for_behavior
+
+        requested_behavior = body.get("jef_behavior")
+        objective, jef_behavior = objective_for_behavior(objective, requested_behavior)
+        if requested_behavior and jef_behavior is None:
+            raise HTTPException(status_code=400, detail=f"unknown JEF behavior: {requested_behavior}")
         if agent_active:
             raise HTTPException(status_code=409, detail="an agent run is already in progress")
         if dashboard_inference_lock.locked():
@@ -1603,6 +1641,7 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
                 "concurrency": concurrency,
                 "request_delay_ms": request_delay_ms,
                 "enabled_techniques": enabled_techniques,
+                "jef_behavior": jef_behavior["id"] if jef_behavior else "",
             },
         )
         queue: asyncio.Queue = asyncio.Queue()
@@ -1678,7 +1717,10 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
         )
 
         history = [user(objective)]
-        runlog.event("objective", text=objective)
+        runlog.event(
+            "objective", text=objective,
+            jef_behavior=jef_behavior["id"] if jef_behavior else "",
+        )
 
         feedback_queue: list[str] = []
 
@@ -1698,6 +1740,7 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
             "runlog": runlog,
             "push": push,
             "objective": objective,
+            "jef_behavior": jef_behavior["id"] if jef_behavior else "",
         }
 
         def mark_pause_ready() -> None:
@@ -1750,7 +1793,9 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
 
         async def gen():
             nonlocal stream_attached
-            push({"type": "start", "objective": objective, "brain": getattr(brain, "model", ""),
+            push({"type": "start", "objective": objective,
+                  "jef_behavior": jef_behavior["id"] if jef_behavior else "",
+                  "brain": getattr(brain, "model", ""),
                   "provider": role_meta.get("attacker", {}).get("provider", ""),
                   "target": getattr(run_config.target, "model", ""),
                   "max_rounds": max_rounds, "max_tokens": max_tokens,
@@ -1979,6 +2024,7 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
                         "target": event.get("target", ""),
                         "max_rounds": event.get("max_rounds", 0),
                         "max_tokens": event.get("max_tokens", 0),
+                        "jef_behavior": event.get("jef_behavior", ""),
                     })
                 elif event_type == "round":
                     ctx.execution.metadata["current_round"] = event.get("round", 0)

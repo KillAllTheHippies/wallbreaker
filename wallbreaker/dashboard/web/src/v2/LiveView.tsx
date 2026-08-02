@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { v2Api } from "./api";
+import { JEFBehaviorPicker } from "./JEFBehaviorPicker";
 import {
   actorLabel,
   EmptyState,
@@ -457,6 +458,7 @@ function RunLauncher({ execution, onRefresh }: { execution: ExecutionSummary | n
   const [maxTokens, setMaxTokens] = useState(8192);
   const [concurrency, setConcurrency] = useState(4);
   const [requestDelay, setRequestDelay] = useState(0);
+  const [jefBehavior, setJefBehavior] = useState("");
   const [techniques, setTechniques] = useState<TechniqueChoice[]>([]);
   const [selected, setSelected] = useState<string[] | null>(() => {
     try { return JSON.parse(localStorage.getItem("wallbreaker:v2:techniques") || "null") as string[] | null; }
@@ -480,6 +482,7 @@ function RunLauncher({ execution, onRefresh }: { execution: ExecutionSummary | n
       await v2Api.createExecution("agent.run", {
         objective: objective.trim(), max_rounds: maxRounds, max_tokens: maxTokens,
         concurrency, request_delay_ms: requestDelay,
+        ...(jefBehavior ? { jef_behavior: jefBehavior } : {}),
         ...(selected == null ? {} : { enabled_techniques: selected }),
       }, "interactive");
       setMessage("Execution queued. Live events will attach automatically.");
@@ -492,6 +495,7 @@ function RunLauncher({ execution, onRefresh }: { execution: ExecutionSummary | n
     <summary><span><strong>{active ? "Current engagement" : "New engagement"}</strong><small>{active ? "Launch controls are available when this run ends" : "Set the objective, then start the agent loop"}</small></span><span>{active ? "In progress" : "Ready"}</span></summary>
     <div className="v2-agent-launch-body">
       <div className="v2-agent-launch-primary">
+        <JEFBehaviorPicker value={jefBehavior} onChange={setJefBehavior} disabled={Boolean(active)} />
         <label className="v2-field"><span>Objective</span><textarea value={objective} onChange={(event) => setObjective(event.target.value)} placeholder="Describe the authorized evaluation objective" /></label>
         <button type="button" className="v2-button v2-button-primary" disabled={working || !objective.trim() || Boolean(active)} onClick={start}>{working ? "Starting" : "Start loop"}</button>
       </div>
