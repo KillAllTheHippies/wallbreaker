@@ -86,8 +86,8 @@
 .v2-rail-foot { display: grid; gap: 7px; margin-top: auto; padding: 13px 14px; border-top: 1px solid var(--v2-line-soft); color: var(--v2-muted); }
 .v2-rail-foot small { font-family: var(--v2-mono); font-size: 9px; }
 .v2-rail-collapsed .v2-brand { min-height: 58px; justify-content: center; padding-inline: 0; }
-.v2-rail-collapsed .v2-brand strong, .v2-rail-collapsed .v2-brand small, .v2-rail-collapsed .v2-rail-section, .v2-rail-collapsed .v2-rail-foot { display: none; }
-.v2-rail-collapsed .v2-brand .v2-rail-toggle { position: absolute; right: -12px; z-index: 3; width: 24px; background: var(--v2-surface); }
+.v2-rail-collapsed .v2-brand > span, .v2-rail-collapsed .v2-brand strong, .v2-rail-collapsed .v2-brand small, .v2-rail-collapsed .v2-rail-section, .v2-rail-collapsed .v2-rail-foot { display: none; }
+.v2-rail-collapsed .v2-brand .v2-rail-toggle { width: 30px; height: 30px; margin: 0; border-color: #3a4240; border-radius: 7px; background: #15201f; color: var(--v2-teal); }
 .v2-rail-collapsed .v2-rail nav { justify-items: center; gap: 5px; padding: 12px 8px; }
 .v2-rail-collapsed .v2-rail nav button { display: grid; width: 40px; min-height: 40px; place-items: center; padding: 0; border-radius: 7px; }
 .v2-rail-collapsed .v2-rail nav button b { display: none; }
