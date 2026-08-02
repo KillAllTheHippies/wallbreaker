@@ -494,7 +494,7 @@ def _agent_settings(prefs: dict | None = None) -> dict:
     return {
         "max_rounds": _int_setting(
             prefs.get("agent_max_rounds", prefs.get("rounds")),
-            8,
+            4,
             1,
             50,
         ),
@@ -1103,9 +1103,9 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
                 raise
         agent = body.get("agent") if isinstance(body.get("agent"), dict) else body
         if "agent_max_rounds" in agent:
-            prefs["agent_max_rounds"] = _int_setting(agent.get("agent_max_rounds"), 8, 1, 50)
+            prefs["agent_max_rounds"] = _int_setting(agent.get("agent_max_rounds"), 4, 1, 50)
         if "max_rounds" in agent:
-            prefs["agent_max_rounds"] = _int_setting(agent.get("max_rounds"), 8, 1, 50)
+            prefs["agent_max_rounds"] = _int_setting(agent.get("max_rounds"), 4, 1, 50)
         if "agent_max_tokens" in agent:
             prefs["agent_max_tokens"] = _int_setting(agent.get("agent_max_tokens"), 8192, 1, 32000)
         if "max_tokens" in agent:
@@ -1405,7 +1405,10 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
                     raise HTTPException(status_code=400, detail=str(exc)) from exc
                 raise
             reg = build_registry(run_config)
-            reg.ctx.jef_behavior = composed["jef_behavior"]
+            # Minimal adapter registries used by integrations need not expose
+            # the rich ToolContext; full registries still receive JEF state.
+            if getattr(reg, "ctx", None) is not None:
+                reg.ctx.jef_behavior = composed["jef_behavior"]
             console_conversation.update({
                 "registry": reg,
                 "run_config": run_config,
@@ -1439,7 +1442,8 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
             with inference_logging(console_runlog):
                 result = await reg.execute(tool_name, args)
         verdict = _extract_verdict(result.content)
-        jef_evaluation = reg.ctx.jef_evaluations[-1] if reg.ctx.jef_evaluations else None
+        jef_evaluations = getattr(getattr(reg, "ctx", None), "jef_evaluations", [])
+        jef_evaluation = jef_evaluations[-1] if jef_evaluations else None
         target = run_config.target
         console_runlog.event(
             "attack_fire",

@@ -369,7 +369,7 @@ def test_settings_get_and_set(tmp_path):
     assert "glm" in g["profiles"]
     assert g["profile_details"]["glm"]["model"] == "glm-5.2"
     assert g["target"]["model"] == "some/text-model"
-    assert g["agent"]["max_rounds"] == 8
+    assert g["agent"]["max_rounds"] == 4
     assert g["agent"]["max_tokens"] == 8192
     assert g["agent"]["concurrency"] == 3
     assert g["agent"]["request_delay_ms"] == 250

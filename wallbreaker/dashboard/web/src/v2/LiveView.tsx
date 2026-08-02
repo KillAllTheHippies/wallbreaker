@@ -457,7 +457,7 @@ function RunStrip({ execution, onRefresh }: { execution: ExecutionSummary | null
 
 function RunLauncher({ execution, onRefresh }: { execution: ExecutionSummary | null; onRefresh: () => void }) {
   const [objective, setObjective] = useState("");
-  const [maxRounds, setMaxRounds] = useState(20);
+  const [maxRounds, setMaxRounds] = useState(4);
   const [maxTokens, setMaxTokens] = useState(8192);
   const [concurrency, setConcurrency] = useState(4);
   const [requestDelay, setRequestDelay] = useState(0);
