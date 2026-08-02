@@ -209,6 +209,7 @@ export interface ConversationTurn {
   is_error?: boolean;
   preset?: string;
   transforms?: string[];
+  jef_behavior?: string;
   continuation: boolean;
 }
 
@@ -217,6 +218,7 @@ export interface ConsoleConversation {
   turn_count: number;
   turns: ConversationTurn[];
   run_log: string;
+  jef_behavior?: string;
   archived_run?: string;
 }
 

@@ -53,7 +53,10 @@ export function ComposeView() {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    v2Api.consoleConversation().then(setConversation).catch(() => undefined);
+    v2Api.consoleConversation().then((next) => {
+      setConversation(next);
+      setJefBehavior(next.jef_behavior || "");
+    }).catch(() => undefined);
   }, []);
 
   const submit = async (action: "preview" | "fire") => {

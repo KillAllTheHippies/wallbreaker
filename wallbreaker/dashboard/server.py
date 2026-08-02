@@ -779,6 +779,7 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
         "registry": None,
         "run_config": None,
         "role_meta": {},
+        "jef_behavior": "",
         "turns": [],
     }
     provider_registry = None
@@ -1305,8 +1306,12 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
 
     @app.post("/api/compose")
     def compose(body: dict):
+        from ..jef import JEFUnavailable
+
         try:
             return _compose_attack_payload(body)
+        except JEFUnavailable as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -1318,6 +1323,7 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
             "turn_count": len(turns),
             "turns": turns,
             "run_log": runlog.path.name if runlog._started else "",
+            "jef_behavior": str(console_conversation.get("jef_behavior") or ""),
         }
 
     def _new_console_runlog(previous) -> object:
@@ -1348,6 +1354,7 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
             "registry": None,
             "run_config": None,
             "role_meta": {},
+            "jef_behavior": "",
             "turns": [],
         })
         return {"ok": True, "archived_run": archived, **_console_conversation_view()}
@@ -1356,14 +1363,28 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
     async def fire(body: dict):
         if config is None:
             raise HTTPException(status_code=400, detail="no [target] configured in config.toml")
+        is_followup = bool(console_conversation["turns"])
+        effective_body = dict(body)
+        if is_followup:
+            conversation_behavior = str(console_conversation.get("jef_behavior") or "")
+            requested_behavior = str(body.get("jef_behavior") or "").strip().lower()
+            if requested_behavior and requested_behavior != conversation_behavior:
+                raise HTTPException(
+                    status_code=400,
+                    detail="JEF behavior is locked for the active Compose conversation",
+                )
+            effective_body["jef_behavior"] = conversation_behavior
+        from ..jef import JEFUnavailable
+
         try:
-            composed = _compose_attack_payload(body)
+            composed = _compose_attack_payload(effective_body)
+        except JEFUnavailable as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         if dashboard_inference_lock.locked():
             raise HTTPException(status_code=409, detail="another dashboard inference is already in progress")
 
-        is_followup = bool(console_conversation["turns"])
         args = {
             "prompt": composed["payload"] if composed["source"] == "payload" else composed["prompt"],
             "max_tokens": composed["max_tokens"],
@@ -1407,11 +1428,12 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
                 models=run_models_meta(run_config, attacker=run_config.profile()),
                 agent_roles=role_meta,
                 conversation_mode="multi_turn",
+                jef_behavior=composed["jef_behavior"],
             )
         tool_name = "continue_target" if is_followup else "query_target"
         console_runlog.event(
             "console_request",
-            request_body=body,
+            request_body=effective_body,
             composed=composed,
             agent_roles=role_meta,
             tool=tool_name,
@@ -1456,6 +1478,8 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
             "jef_behavior": composed["jef_behavior"],
             "continuation": is_followup,
         }
+        if not is_followup:
+            console_conversation["jef_behavior"] = composed["jef_behavior"]
         console_conversation["turns"].append(turn)
         return {
             **composed,
@@ -1586,10 +1610,13 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
         objective = str(body.get("objective") or "").strip()
         if not objective:
             raise HTTPException(status_code=400, detail="'objective' is required")
-        from ..jef import objective_for_behavior
+        from ..jef import JEFUnavailable, objective_for_behavior
 
         requested_behavior = body.get("jef_behavior")
-        objective, jef_behavior = objective_for_behavior(objective, requested_behavior)
+        try:
+            objective, jef_behavior = objective_for_behavior(objective, requested_behavior)
+        except JEFUnavailable as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
         if requested_behavior and jef_behavior is None:
             raise HTTPException(status_code=400, detail=f"unknown JEF behavior: {requested_behavior}")
         if agent_active:

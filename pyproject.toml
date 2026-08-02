@@ -24,7 +24,7 @@ dependencies = [
     "rich>=13.7",
     "mcp>=1.0",
     "python-dotenv>=1.0",
-    "0din-jef==0.8.0",
+    "0din-jef==0.8.0; python_version >= '3.12'",
 ]
 
 [project.urls]
