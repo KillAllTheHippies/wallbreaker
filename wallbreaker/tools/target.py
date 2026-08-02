@@ -73,25 +73,28 @@ def _format_reply(reply: str, reasoning: str) -> str:
 
 async def _jef_judge_result(
     ctx: ToolContext, response: str, payload: str, reasoning: str, technique: str,
+    *, interrupted: bool = False,
 ) -> str:
     """Run JEF as an explicit judge-stage, then provide its full result to the judge."""
     behavior = str(getattr(ctx, "jef_behavior", "") or "")
     if not behavior:
         return ""
+    ctx._jef_output_seq += 1
+    output_id = ctx._jef_output_seq
+    output_record = {
+        "output_id": output_id,
+        "behavior": behavior,
+        "technique": technique,
+        "interrupted": bool(interrupted),
+    }
+    ctx.jef_target_outputs.append(output_record)
     from ..jef import score_response
 
     evaluation = score_response(behavior, response)
     if evaluation is None:
         return ""
-    if evaluation.get("status") != "scored":
-        ctx.jef_evaluations.append(evaluation)
-        if ctx.run_events is not None:
-            ctx.run_events({"event": "jef_evaluation", "actor": "judge", "evaluation": evaluation})
-        return "\n[JEF evaluation unavailable]"
-    percentage = float(evaluation.get("percentage", 0))
-    threshold = int(evaluation.get("threshold", 0))
-    status = "TRIGGERED" if evaluation.get("triggered") else "not triggered"
-    ctx.emit(f"JEF {evaluation.get('behavior', behavior)}: {percentage:.2f}% / {threshold}% — {status}")
+    evaluation = dict(evaluation)
+    evaluation.update(output_record)
     from ..judging import grade
 
     label, score, reason, source = await grade(
@@ -110,6 +113,12 @@ async def _jef_judge_result(
         ctx.run_events({"event": "jef_evaluation", "actor": "judge", "evaluation": evaluation})
     if ctx.run_events is not None:
         ctx.run_events({"event": "judge_verdict", "actor": "judge", "verdict": verdict})
+    if evaluation.get("status") != "scored":
+        return f"\n[JEF evaluation unavailable]\n[JUDGE {label}: {reason} ({source})]"
+    percentage = float(evaluation.get("percentage", 0))
+    threshold = int(evaluation.get("threshold", 0))
+    status = "TRIGGERED" if evaluation.get("triggered") else "not triggered"
+    ctx.emit(f"JEF {evaluation.get('behavior', behavior)}: {percentage:.2f}% / {threshold}% — {status}")
     return (
         f"\n[JEF {evaluation.get('behavior', behavior)}: {percentage:.2f}% / {threshold}% — {status}]"
         f"\n[JUDGE {label}: {reason} ({source})]"
@@ -190,7 +199,7 @@ def _cache_enabled(args: dict, ctx: ToolContext) -> bool:
     return bool(args.get("cache", False)) or bool(getattr(ctx, "use_cache", False))
 
 
-def _cache_hit_output(ctx, messages, system, entry, enc_note, args) -> str:
+async def _cache_hit_output(ctx, messages, system, entry, enc_note, args) -> str:
     """Reconstruct a query_target reply from a cached entry without any provider call."""
     response = entry.get("last_response", "")
     ctx.target_thread = _persist_thread(messages, response or "")
@@ -211,7 +220,9 @@ def _cache_hit_output(ctx, messages, system, entry, enc_note, args) -> str:
         f"(samples={entry.get('samples', 0)}, last={entry.get('last_label', '')})"
         f"{enc_note}{dec_note}]\n"
     )
-    return header + body
+    return header + body + await _jef_judge_result(
+        ctx, body, messages[-1].text(), "", "query_target_cache"
+    )
 
 
 async def _query_target(args: dict, ctx: ToolContext) -> str:
@@ -282,7 +293,7 @@ async def _query_target(args: dict, ctx: ToolContext) -> str:
         hit = cache.get(cache_key)
         if hit is not None:
             ctx.emit(f"query_target: cache hit (samples={hit.get('samples', 0)}) - no target call")
-            return _cache_hit_output(ctx, messages, system, hit, enc_note, args)
+            return await _cache_hit_output(ctx, messages, system, hit, enc_note, args)
 
     start = time.monotonic()
     try:
@@ -298,13 +309,22 @@ async def _query_target(args: dict, ctx: ToolContext) -> str:
     # "it came back empty" failure - one retry at a higher ceiling recovers the answer
     # instead of mis-scoring it REFUSED or burning a manual diagnosis turn.
     bumped_to: int | None = None
+    interrupted_jef_note = ""
+    retry_failed = False
     if empty and reasoning.strip() and max_tokens < _TRUNC_CEILING:
+        # This output was produced by the target and can contain substantive CoT even
+        # though the automatic retry replaces it in the displayed final response.
+        # Evaluate it before retrying so completion coverage cannot silently omit it.
+        interrupted_jef_note = await _jef_judge_result(
+            ctx, _format_reply(reply, reasoning), messages[-1].text(), reasoning,
+            "query_target", interrupted=True,
+        )
         bumped_to = min(max_tokens * 2, _TRUNC_CEILING)
         ctx.emit(f"query_target: empty answer + populated CoT (stop={stop}); auto-retry at max_tokens={bumped_to}")
         try:
             reply, reasoning, stop, empty = await _fire(provider, messages, system, bumped_to)
         except Exception:  # noqa: BLE001
-            pass
+            retry_failed = True
     dt = time.monotonic() - start
     # open a hands-on conversation: continue_target picks up from here (RAW reply threads back)
     ctx.target_thread = _persist_thread(messages, reply)
@@ -336,9 +356,11 @@ async def _query_target(args: dict, ctx: ToolContext) -> str:
             f"{raw_encoded[:300]}"
         )
     header = f"[target {target.model} @ {target.base_url} | {dt:.1f}s{enc_note}{dec_note}]\n"
-    return header + body + note + await _jef_judge_result(
-        ctx, body, messages[-1].text(), reasoning, "query_target"
+    jef_note = interrupted_jef_note if retry_failed else await _jef_judge_result(
+        ctx, body, messages[-1].text(), reasoning, "query_target",
+        interrupted=bool(stop in _TRUNC_REASONS),
     )
+    return header + body + note + jef_note
 
 
 async def _continue_target(args: dict, ctx: ToolContext) -> str:
@@ -397,7 +419,8 @@ async def _continue_target(args: dict, ctx: ToolContext) -> str:
         )
     header = f"[target {target.model} | turn {turns} | {dt:.1f}s{enc_note}{dec_note}]\n"
     return header + body + note + await _jef_judge_result(
-        ctx, body, follow, reasoning, "continue_target"
+        ctx, body, follow, reasoning, "continue_target",
+        interrupted=bool(stop in _TRUNC_REASONS),
     )
 
 

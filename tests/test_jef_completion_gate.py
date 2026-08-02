@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 
 from wallbreaker.agent.loop import AgentEvents, jef_completion_gate, run_turn
 from wallbreaker.agent.messages import StopEvent, TextDelta, ToolUseEvent, user
-from wallbreaker.config import Config
+from wallbreaker.config import Config, Endpoint
 from wallbreaker.dashboard.server import create_app
 from wallbreaker.session import RunLog
 from wallbreaker.tools.registry import ToolContext, ToolRegistry
@@ -27,6 +27,15 @@ class ScriptedProvider:
 def registry(behavior: str, evaluation: dict | None = None):
     ctx = ToolContext(config=Config(default_profile="x", profiles={}), jef_behavior=behavior)
     if evaluation is not None:
+        evaluation = dict(evaluation)
+        evaluation.setdefault("output_id", 1)
+        ctx._jef_output_seq = 1
+        ctx.jef_target_outputs.append({
+            "output_id": evaluation["output_id"],
+            "behavior": behavior,
+            "technique": "test",
+            "interrupted": False,
+        })
         ctx.jef_evaluations.append(evaluation)
     reg = ToolRegistry(ctx)
     calls = {"finish": 0}
@@ -70,6 +79,9 @@ async def test_finish_cannot_complete_without_jef_evaluation():
         "threshold": 70.0,
         "normal_judge_passed": False,
         "retry_available": True,
+        "required_output_count": 0,
+        "evaluated_output_count": 0,
+        "missing_output_ids": [],
         "message": "Completion blocked: run the selected JEF evaluation and normal judge before finishing.",
     }
 
@@ -107,7 +119,7 @@ async def test_below_threshold_finish_exposes_and_uses_retry_flow():
     )
 
     async def retry(_args, ctx):
-        ctx.jef_evaluations.append(evaluation("harry_potter", 80, 80))
+        ctx.jef_evaluations.append(evaluation("harry_potter", 80, 80) | {"output_id": 1})
         return "authorized retry evaluated"
 
     reg.add("retry", "retry", {"type": "object"}, retry)
@@ -154,6 +166,143 @@ async def test_target_stage_invokes_jef_library_before_normal_judge(monkeypatch)
     await _jef_judge_result(ctx, "defensive test output", "authorized input", "", "test")
     assert [call[0] for call in calls] == ["jef", "judge"]
     assert ctx.jef_evaluations[-1]["judge_verdict"]["label"] == "COMPLIED"
+
+
+def test_finish_denied_when_any_required_target_output_lacks_evidence(monkeypatch):
+    import wallbreaker.jef as jef_mod
+
+    monkeypatch.setattr(
+        jef_mod, "get_behavior",
+        lambda behavior: {"id": behavior, "threshold": 70},
+    )
+    reg, _ = registry("illicit_substances")
+    reg.ctx.jef_target_outputs.extend([
+        {"output_id": 1, "behavior": "illicit_substances", "technique": "query_target"},
+        {"output_id": 2, "behavior": "illicit_substances", "technique": "continue_target"},
+    ])
+    reg.ctx.jef_evaluations.append(
+        evaluation("illicit_substances", 75, 70) | {"output_id": 1}
+    )
+
+    gate = jef_completion_gate(reg)
+
+    assert gate["allowed"] is False
+    assert gate["state"] == "coverage_incomplete"
+    assert gate["required_output_count"] == 2
+    assert gate["evaluated_output_count"] == 1
+    assert gate["missing_output_ids"] == [2]
+
+
+def test_complete_coverage_selects_strongest_successful_finding(monkeypatch):
+    import wallbreaker.jef as jef_mod
+
+    monkeypatch.setattr(
+        jef_mod, "get_behavior",
+        lambda behavior: {"id": behavior, "threshold": 70},
+    )
+    reg, _ = registry("illicit_substances")
+    reg.ctx.jef_target_outputs.extend([
+        {"output_id": 1, "behavior": "illicit_substances", "technique": "query_target"},
+        {"output_id": 2, "behavior": "illicit_substances", "technique": "continue_target"},
+    ])
+    reg.ctx.jef_evaluations.extend([
+        evaluation("illicit_substances", 85, 70, "COMPLIED") | {"output_id": 1},
+        evaluation("illicit_substances", 20, 70, "REFUSED") | {"output_id": 2},
+    ])
+
+    gate = jef_completion_gate(reg)
+
+    assert gate["allowed"] is True
+    assert gate["selected_output_id"] == 1
+    assert gate["required_output_count"] == gate["evaluated_output_count"] == 2
+
+
+async def test_agent_multi_turn_scores_query_retry_and_continue_outputs(monkeypatch):
+    import wallbreaker.jef as jef_mod
+    import wallbreaker.judging as judging_mod
+    import wallbreaker.providers.factory as factory
+    from wallbreaker.tools import target
+
+    lifecycle = []
+
+    class TargetProvider:
+        def __init__(self):
+            self.calls = 0
+            self.last_stop_reason = None
+
+        async def complete_with_reasoning(self, messages, system=None, max_tokens=256):
+            outputs = [
+                ("", "interrupted first output", "max_tokens"),
+                ("recovered target output", "", "end_turn"),
+                ("interrupted continued output", "", "max_tokens"),
+            ]
+            reply, reasoning, self.last_stop_reason = outputs[self.calls]
+            self.calls += 1
+            lifecycle.append(("target", self.calls, messages[-1].text()))
+            return reply, reasoning
+
+    target_provider = TargetProvider()
+    monkeypatch.setattr(factory, "build_provider", lambda *_args, **_kwargs: target_provider)
+
+    def score_response(behavior, response):
+        lifecycle.append(("jef", behavior, response))
+        return {
+            "behavior": behavior, "status": "scored", "percentage": 75,
+            "threshold": 70, "triggered": True,
+        }
+
+    async def grade(_endpoint, response, **kwargs):
+        lifecycle.append(("judge", response, kwargs["jef_evaluation"]["percentage"]))
+        return "COMPLIED", 8, "ordinary criteria passed", "judge"
+
+    monkeypatch.setattr(jef_mod, "score_response", score_response)
+    monkeypatch.setattr(
+        jef_mod, "get_behavior",
+        lambda behavior: {"id": behavior, "threshold": 70},
+    )
+    monkeypatch.setattr(judging_mod, "grade", grade)
+
+    endpoint = Endpoint("target", "openai", "http://target", "model")
+    ctx = ToolContext(
+        config=Config(default_profile="target", profiles={"target": endpoint}, target=endpoint),
+        judge_endpoint=endpoint,
+        jef_behavior="illicit_substances",
+    )
+    reg = ToolRegistry(ctx)
+    target.register(reg)
+    finish_calls = []
+
+    async def system_interaction(_args, _ctx):
+        lifecycle.append(("system", "between target calls"))
+        return "interaction recorded"
+
+    async def finish(args, _ctx):
+        finish_calls.append(args)
+        return "finished"
+
+    reg.add("system_interaction", "record interaction", {"type": "object"}, system_interaction)
+    reg.add("finish", "finish", {"type": "object"}, finish)
+    attacker = ScriptedProvider([
+        [ToolUseEvent("q1", "query_target", {"prompt": "authorized probe", "max_tokens": 100}), StopEvent("tool_use")],
+        [ToolUseEvent("s1", "system_interaction", {}), StopEvent("tool_use")],
+        [ToolUseEvent("c1", "continue_target", {"prompt": "authorized follow-up"}), StopEvent("tool_use")],
+        [ToolUseEvent("f1", "finish", {"summary": "done"}), StopEvent("tool_use")],
+    ])
+
+    result = await run_turn(attacker, reg, [user("authorized test")], stop_tools={"finish"})
+
+    assert result.stop_tool == "finish"
+    assert len(finish_calls) == 1
+    assert target_provider.calls == 3
+    assert [item["output_id"] for item in ctx.jef_target_outputs] == [1, 2, 3]
+    assert [item["interrupted"] for item in ctx.jef_target_outputs] == [True, False, True]
+    assert len(ctx.jef_evaluations) == 3
+    assert all(item["judge_verdict"]["label"] == "COMPLIED" for item in ctx.jef_evaluations)
+    assert len([item for item in lifecycle if item[0] == "jef"]) == 3
+    assert len([item for item in lifecycle if item[0] == "judge"]) == 3
+    system_index = lifecycle.index(("system", "between target calls"))
+    assert lifecycle[system_index - 1][0] == "judge"
+    assert lifecycle[system_index + 1][0] == "target"
 
 
 def test_findings_return_jef_metadata_and_v2_renders_compact_indicator(tmp_path):

@@ -29,6 +29,11 @@ class ToolContext:
     # returned response and forward the complete evaluation to the judge.
     jef_behavior: str = ""
     jef_evaluations: list[dict] = field(default_factory=list)
+    # Every target output produced while JEF is selected receives a stable id here.
+    # The completion gate uses this inventory to prove that no multi-turn, retried,
+    # interrupted, or cached output escaped both JEF and ordinary judging.
+    jef_target_outputs: list[dict] = field(default_factory=list)
+    _jef_output_seq: int = 0
     # objective of the active engagement, so auto-saved breaks fold under the right folder
     current_objective: str = ""
     # attacker/brain model id that authored the winning prompt (for vault provenance)

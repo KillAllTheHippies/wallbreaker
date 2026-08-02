@@ -78,9 +78,11 @@ def jef_completion_gate(registry: ToolRegistry | None) -> dict | None:
     """Return the authoritative JEF/normal-judge decision for a finish attempt.
 
     A missing return means no JEF behavior is selected and preserves the existing
-    Agent Mode completion behavior. Selected JEF runs fail closed: the latest target
-    response must have both a scored JEF result at its registry-provided threshold and
-    a normal WallBreaker judge verdict that satisfies the existing ``is_win`` rule.
+    Agent Mode completion behavior. Selected JEF runs fail closed: every target output
+    must have paired JEF and ordinary-judge evidence. Because WallBreaker treats any
+    COMPLIED/PARTIAL target response as a successful finding and JEF scores one response
+    at a time, completion selects the strongest fully-qualified output rather than
+    averaging unrelated turns.
     """
     ctx = getattr(registry, "ctx", None)
     behavior = str(getattr(ctx, "jef_behavior", "") or "").strip()
@@ -92,15 +94,15 @@ def jef_completion_gate(registry: ToolRegistry | None) -> dict | None:
     metadata = get_behavior(behavior) or {}
     authoritative_threshold = _number(metadata.get("threshold"))
 
-    evaluations = getattr(ctx, "jef_evaluations", []) or []
-    evaluation = next(
-        (
-            item for item in reversed(evaluations)
-            if isinstance(item, dict) and str(item.get("behavior") or "") == behavior
-        ),
-        None,
-    )
-    if evaluation is None:
+    required = [
+        item for item in (getattr(ctx, "jef_target_outputs", []) or [])
+        if isinstance(item, dict) and str(item.get("behavior") or "") == behavior
+    ]
+    evaluations = [
+        item for item in (getattr(ctx, "jef_evaluations", []) or [])
+        if isinstance(item, dict) and str(item.get("behavior") or "") == behavior
+    ]
+    if not required:
         # Resolve display metadata from the installed JEF registry, but do not treat
         # registry lookup as evaluation: a target response still has to be scored.
         return {
@@ -111,38 +113,91 @@ def jef_completion_gate(registry: ToolRegistry | None) -> dict | None:
             "threshold": authoritative_threshold,
             "normal_judge_passed": False,
             "retry_available": True,
+            "required_output_count": 0,
+            "evaluated_output_count": 0,
+            "missing_output_ids": [],
             "message": "Completion blocked: run the selected JEF evaluation and normal judge before finishing.",
         }
 
-    recorded_threshold = _number(evaluation.get("threshold"))
-    threshold = authoritative_threshold
-    percentage = _number(evaluation.get("percentage"))
-    verdict = evaluation.get("judge_verdict")
-    label = str(verdict.get("label") or "") if isinstance(verdict, dict) else ""
-    normal_passed = is_win(label)
-    scored = evaluation.get("status") == "scored" and percentage is not None
-    threshold_valid = (
-        threshold is not None
-        and threshold >= 0
-        and recorded_threshold == threshold
-    )
+    by_output = {
+        item.get("output_id"): item for item in evaluations
+        if item.get("output_id") is not None
+    }
+    missing = [
+        item.get("output_id") for item in required
+        if item.get("output_id") not in by_output
+    ]
+    if missing:
+        return {
+            "allowed": False,
+            "state": "coverage_incomplete",
+            "behavior": behavior,
+            "score": None,
+            "threshold": authoritative_threshold,
+            "normal_judge_passed": False,
+            "retry_available": True,
+            "required_output_count": len(required),
+            "evaluated_output_count": len(required) - len(missing),
+            "missing_output_ids": missing,
+            "message": "Completion blocked: one or more target outputs lack paired JEF and normal judge evidence.",
+        }
 
-    if not scored or not threshold_valid:
+    paired = [by_output[item.get("output_id")] for item in required]
+    threshold = authoritative_threshold
+
+    def usable(item: dict) -> bool:
+        percentage = _number(item.get("percentage"))
+        verdict = item.get("judge_verdict")
+        return (
+            item.get("status") == "scored"
+            and percentage is not None
+            and threshold is not None
+            and threshold >= 0
+            and _number(item.get("threshold")) == threshold
+            and isinstance(verdict, dict)
+            and bool(str(verdict.get("label") or ""))
+        )
+
+    unusable = [item for item in paired if not usable(item)]
+    if unusable:
         state = "evaluation_unavailable"
         allowed = False
+        selected = unusable[-1]
+        percentage = _number(selected.get("percentage"))
+        verdict = selected.get("judge_verdict")
+        label = str(verdict.get("label") or "") if isinstance(verdict, dict) else ""
+        normal_passed = is_win(label)
         message = "Completion blocked: the selected JEF scorer did not return a usable score and threshold."
-    elif not normal_passed:
-        state = "normal_judge_failed"
-        allowed = False
-        message = "Completion blocked: JEF evidence cannot override the normal judge criteria."
-    elif percentage < threshold:
-        state = "below_threshold"
-        allowed = False
-        message = f"Completion blocked: JEF scored {percentage:g}% below its {threshold:g}% pass threshold."
     else:
-        state = "passed"
-        allowed = True
-        message = f"Completion allowed: normal judge passed and JEF scored {percentage:g}% / {threshold:g}%."
+        normal_wins = [
+            item for item in paired
+            if is_win(str(item["judge_verdict"].get("label") or ""))
+        ]
+        qualified = [
+            item for item in normal_wins
+            if _number(item.get("percentage")) >= threshold
+        ]
+        candidates = qualified or normal_wins or paired
+        selected = max(
+            candidates,
+            key=lambda item: (_number(item.get("percentage")) or 0, item.get("output_id") or 0),
+        )
+        percentage = _number(selected.get("percentage"))
+        verdict = selected["judge_verdict"]
+        label = str(verdict.get("label") or "")
+        normal_passed = is_win(label)
+        if qualified:
+            state = "passed"
+            allowed = True
+            message = f"Completion allowed: all target outputs were evaluated and the strongest qualifying output scored {percentage:g}% / {threshold:g}%."
+        elif normal_wins:
+            state = "below_threshold"
+            allowed = False
+            message = f"Completion blocked: the strongest normally passing output scored {percentage:g}% below the {threshold:g}% JEF pass threshold."
+        else:
+            state = "normal_judge_failed"
+            allowed = False
+            message = "Completion blocked: JEF evidence cannot override the normal judge criteria."
 
     return {
         "allowed": allowed,
@@ -153,6 +208,10 @@ def jef_completion_gate(registry: ToolRegistry | None) -> dict | None:
         "normal_judge_passed": normal_passed,
         "normal_judge_label": label,
         "retry_available": not allowed,
+        "required_output_count": len(required),
+        "evaluated_output_count": len(paired),
+        "missing_output_ids": [],
+        "selected_output_id": selected.get("output_id"),
         "message": message,
     }
 
