@@ -83,10 +83,10 @@ async def _jef_judge_result(
     evaluation = score_response(behavior, response)
     if evaluation is None:
         return ""
-    ctx.jef_evaluations.append(evaluation)
-    if ctx.run_events is not None:
-        ctx.run_events({"event": "jef_evaluation", "actor": "judge", "evaluation": evaluation})
     if evaluation.get("status") != "scored":
+        ctx.jef_evaluations.append(evaluation)
+        if ctx.run_events is not None:
+            ctx.run_events({"event": "jef_evaluation", "actor": "judge", "evaluation": evaluation})
         return "\n[JEF evaluation unavailable]"
     percentage = float(evaluation.get("percentage", 0))
     threshold = int(evaluation.get("threshold", 0))
@@ -99,8 +99,15 @@ async def _jef_judge_result(
         objective=ctx.current_objective, reasoning=reasoning,
         jef_evaluation=evaluation,
     )
-    ctx.record_verdict(payload, response, label, reason, technique)
     verdict = {"label": label, "score": score, "reason": reason, "source": source}
+    # Keep the deterministic JEF result and WallBreaker's normal judge result paired.
+    # Agent completion requires both; recording them together prevents a later finish
+    # call from accidentally combining evidence from different target responses.
+    evaluation["judge_verdict"] = verdict
+    ctx.jef_evaluations.append(evaluation)
+    ctx.record_verdict(payload, response, label, reason, technique)
+    if ctx.run_events is not None:
+        ctx.run_events({"event": "jef_evaluation", "actor": "judge", "evaluation": evaluation})
     if ctx.run_events is not None:
         ctx.run_events({"event": "judge_verdict", "actor": "judge", "verdict": verdict})
     return (

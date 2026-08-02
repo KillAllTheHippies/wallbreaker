@@ -7,6 +7,7 @@ from dataclasses import dataclass
 
 from ..providers.base import Provider, ProviderError
 from ..tools.registry import ToolRegistry
+from ..vault import is_win
 from .messages import (
     Message,
     ReasoningDelta,
@@ -46,6 +47,7 @@ class AgentEvents:
     on_round: Callable[[int, int], None] = lambda _r, _m: None
     on_feedback: Callable[[str], None] = lambda _m: None
     on_internal_message: Callable[[str, str, str], None] = lambda _r, _t, _s: None
+    on_completion_gate: Callable[[dict], None] = lambda _g: None
 
 
 @dataclass
@@ -63,6 +65,96 @@ class AutoResult:
     status: str
     data: dict
     message: Message | None
+
+
+def _number(value) -> float | None:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def jef_completion_gate(registry: ToolRegistry | None) -> dict | None:
+    """Return the authoritative JEF/normal-judge decision for a finish attempt.
+
+    A missing return means no JEF behavior is selected and preserves the existing
+    Agent Mode completion behavior. Selected JEF runs fail closed: the latest target
+    response must have both a scored JEF result at its registry-provided threshold and
+    a normal WallBreaker judge verdict that satisfies the existing ``is_win`` rule.
+    """
+    ctx = getattr(registry, "ctx", None)
+    behavior = str(getattr(ctx, "jef_behavior", "") or "").strip()
+    if not behavior:
+        return None
+
+    from ..jef import get_behavior
+
+    metadata = get_behavior(behavior) or {}
+    authoritative_threshold = _number(metadata.get("threshold"))
+
+    evaluations = getattr(ctx, "jef_evaluations", []) or []
+    evaluation = next(
+        (
+            item for item in reversed(evaluations)
+            if isinstance(item, dict) and str(item.get("behavior") or "") == behavior
+        ),
+        None,
+    )
+    if evaluation is None:
+        # Resolve display metadata from the installed JEF registry, but do not treat
+        # registry lookup as evaluation: a target response still has to be scored.
+        return {
+            "allowed": False,
+            "state": "evaluation_required",
+            "behavior": behavior,
+            "score": None,
+            "threshold": authoritative_threshold,
+            "normal_judge_passed": False,
+            "retry_available": True,
+            "message": "Completion blocked: run the selected JEF evaluation and normal judge before finishing.",
+        }
+
+    recorded_threshold = _number(evaluation.get("threshold"))
+    threshold = authoritative_threshold
+    percentage = _number(evaluation.get("percentage"))
+    verdict = evaluation.get("judge_verdict")
+    label = str(verdict.get("label") or "") if isinstance(verdict, dict) else ""
+    normal_passed = is_win(label)
+    scored = evaluation.get("status") == "scored" and percentage is not None
+    threshold_valid = (
+        threshold is not None
+        and threshold >= 0
+        and recorded_threshold == threshold
+    )
+
+    if not scored or not threshold_valid:
+        state = "evaluation_unavailable"
+        allowed = False
+        message = "Completion blocked: the selected JEF scorer did not return a usable score and threshold."
+    elif not normal_passed:
+        state = "normal_judge_failed"
+        allowed = False
+        message = "Completion blocked: JEF evidence cannot override the normal judge criteria."
+    elif percentage < threshold:
+        state = "below_threshold"
+        allowed = False
+        message = f"Completion blocked: JEF scored {percentage:g}% below its {threshold:g}% pass threshold."
+    else:
+        state = "passed"
+        allowed = True
+        message = f"Completion allowed: normal judge passed and JEF scored {percentage:g}% / {threshold:g}%."
+
+    return {
+        "allowed": allowed,
+        "state": state,
+        "behavior": behavior,
+        "score": percentage,
+        "threshold": threshold,
+        "normal_judge_passed": normal_passed,
+        "normal_judge_label": label,
+        "retry_available": not allowed,
+        "message": message,
+    }
 
 
 def _push_feedback(
@@ -255,6 +347,18 @@ async def run_turn(
         stop_args: dict | None = None
         for tc in tool_calls:
             events.on_tool_start(tc.id, tc.name, tc.input)
+            if tc.name == "finish":
+                gate = jef_completion_gate(registry)
+                if gate is not None:
+                    events.on_completion_gate(gate)
+                    if not gate["allowed"]:
+                        content = (
+                            f"{gate['message']} Try another authorized evaluation attempt, "
+                            "then call finish only after both checks pass."
+                        )
+                        events.on_tool_result(tc.id, tc.name, content, True)
+                        results.append(ToolResultBlock(tc.id, content, True))
+                        continue
             res = await registry.execute(tc.name, tc.input)
             events.on_tool_result(tc.id, tc.name, res.content, res.is_error)
             results.append(ToolResultBlock(tc.id, res.content, res.is_error))

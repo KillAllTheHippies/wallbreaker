@@ -514,7 +514,8 @@ class RunLog:
 
     def verdict(
         self, payload: str, response: str, label: str, reason: str, technique: str = "",
-        *, target_model: str = "",
+        *, target_model: str = "", jef_behavior: str = "",
+        jef_evaluation: dict | None = None,
     ) -> None:
         data = {
             "payload": payload, "response": response, "label": label,
@@ -522,6 +523,10 @@ class RunLog:
         }
         if target_model:
             data["target_model"] = target_model
+        if jef_behavior:
+            data["jef_behavior"] = jef_behavior
+        if jef_evaluation is not None:
+            data["jef_evaluation"] = jef_evaluation
         self.event("verdict", **data)
 
 

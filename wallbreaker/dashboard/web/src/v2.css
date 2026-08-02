@@ -831,3 +831,31 @@
   .v2-loop-event-summary > :last-child { display: none; }
   .v2-loop-event-detail { padding-left: 20px; }
 }
+.v2-jef-retry {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px 18px;
+  align-items: center;
+  padding: 16px 18px;
+  border: 1px solid color-mix(in srgb, var(--v2-amber) 55%, var(--v2-line));
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--v2-amber) 8%, var(--v2-surface));
+}
+
+.v2-jef-retry div { display: grid; gap: 4px; }
+.v2-jef-retry div > span, .v2-jef-retry p, .v2-jef-retry > span { color: var(--v2-muted); }
+.v2-jef-retry p { margin: 0; }
+.v2-jef-retry > span { grid-column: 1 / -1; }
+
+.v2-jef-indicator {
+  display: inline-flex;
+  align-items: center;
+  min-height: 18px;
+  padding: 1px 6px;
+  border: 1px solid var(--v2-line);
+  border-radius: 999px;
+  color: var(--v2-amber);
+  font: 600 10px/1 var(--v2-mono);
+  white-space: nowrap;
+}
+.v2-jef-indicator.pass { color: var(--v2-green); }

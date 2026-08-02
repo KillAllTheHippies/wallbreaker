@@ -1735,6 +1735,11 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
         def internal_message(role, text, source) -> None:
             runlog.event("history_message", role=role, text=text, source=source)
 
+        def completion_gate(gate: dict) -> None:
+            payload = dict(gate)
+            runlog.event("jef_completion_gate", actor="judge", **payload)
+            push({"type": "jef_completion_gate", "actor": "judge", **payload})
+
         def tool_run_event(event) -> None:
             payload = dict(event) if isinstance(event, dict) else {"text": str(event)}
             event_type = str(payload.pop("event", "tool_run_event"))
@@ -1745,10 +1750,17 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
         registry.ctx.run_events = tool_run_event
         registry.ctx.jef_behavior = jef_behavior["id"] if jef_behavior else ""
         registry.ctx.current_objective = objective
-        registry.ctx.record = lambda p, r, lbl, rs, t: runlog.verdict(
-            p, r, lbl, rs, t,
-            target_model=getattr(run_config.target, "model", "") if run_config.target else "",
-        )
+        def record_verdict(payload, response, label, reason, technique) -> None:
+            evaluations = registry.ctx.jef_evaluations
+            evaluation = evaluations[-1] if evaluations else None
+            runlog.verdict(
+                payload, response, label, reason, technique,
+                target_model=getattr(run_config.target, "model", "") if run_config.target else "",
+                jef_behavior=registry.ctx.jef_behavior,
+                jef_evaluation=evaluation,
+            )
+
+        registry.ctx.record = record_verdict
 
         events = AgentEvents(
             on_text=lambda t: push({"type": "text", "text": t}),
@@ -1758,6 +1770,7 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
             on_error=error_event,
             on_feedback=feedback_event,
             on_internal_message=internal_message,
+            on_completion_gate=completion_gate,
             on_usage=lambda i, o: push({"type": "usage", "input": i, "output": o}),
         )
 
@@ -2086,6 +2099,15 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
                     if verdict:
                         ctx.execution.metadata["verdict"] = verdict
                     ctx.execution.metadata["technique"] = event.get("name", "")
+                elif event_type == "jef_completion_gate":
+                    ctx.execution.metadata["jef_completion_gate"] = {
+                        "state": event.get("state", ""),
+                        "behavior": event.get("behavior", ""),
+                        "score": event.get("score"),
+                        "threshold": event.get("threshold"),
+                        "normal_judge_passed": bool(event.get("normal_judge_passed")),
+                        "retry_available": bool(event.get("retry_available")),
+                    }
                 if event_type == "control":
                     state = str(event.get("state") or "")
                     if state in {"paused", "pausing", "running"}:

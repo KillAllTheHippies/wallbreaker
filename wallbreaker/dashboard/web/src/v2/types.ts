@@ -155,6 +155,8 @@ export interface FindingRecord {
   response?: string;
   reason?: string;
   category?: string;
+  jef_behavior?: string;
+  jef_evaluation?: JEFEvaluation;
   raw?: string;
   [key: string]: unknown;
 }

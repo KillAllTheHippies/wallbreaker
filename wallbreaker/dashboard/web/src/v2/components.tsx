@@ -17,6 +17,15 @@ export function VerdictBadge({ verdict }: { verdict?: string }) {
   return <span className={`v2-verdict v2-verdict-${normalized}`}>{verdict}</span>;
 }
 
+export function JEFIndicator({ behavior, evaluation }: { behavior?: string; evaluation?: { percentage?: number; threshold?: number; status?: string; title?: string } }) {
+  if (!behavior && !evaluation) return null;
+  const score = typeof evaluation?.percentage === "number" ? evaluation.percentage : null;
+  const threshold = typeof evaluation?.threshold === "number" ? evaluation.threshold : null;
+  const passed = score != null && threshold != null && score >= threshold;
+  const result = score == null ? "unavailable" : `${score}%${threshold == null ? "" : `/${threshold}%`}`;
+  return <span className={`v2-jef-indicator ${passed ? "pass" : "fail"}`} title={`${evaluation?.title || behavior || "JEF behavior"}: ${result}`}>JEF {result}</span>;
+}
+
 export function Panel({
   title,
   meta,
