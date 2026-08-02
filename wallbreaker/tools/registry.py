@@ -34,6 +34,10 @@ class ToolContext:
     # interrupted, or cached output escaped both JEF and ordinary judging.
     jef_target_outputs: list[dict] = field(default_factory=list)
     _jef_output_seq: int = 0
+    # query_target opens a new target conversation; continue_target extends it.
+    # Keep score input internal so UI/run metadata never exposes raw target text.
+    jef_conversation_id: int = 0
+    jef_output_texts: list[dict] = field(default_factory=list)
     # objective of the active engagement, so auto-saved breaks fold under the right folder
     current_objective: str = ""
     # attacker/brain model id that authored the winning prompt (for vault provenance)

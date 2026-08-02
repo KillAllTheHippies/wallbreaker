@@ -79,22 +79,45 @@ async def _jef_judge_result(
     behavior = str(getattr(ctx, "jef_behavior", "") or "")
     if not behavior:
         return ""
+    if ctx.jef_conversation_id <= 0:
+        ctx.jef_conversation_id = 1
     ctx._jef_output_seq += 1
     output_id = ctx._jef_output_seq
+    conversation_id = ctx.jef_conversation_id
     output_record = {
         "output_id": output_id,
         "behavior": behavior,
         "technique": technique,
         "interrupted": bool(interrupted),
+        "conversation_id": conversation_id,
     }
     ctx.jef_target_outputs.append(output_record)
+    ctx.jef_output_texts.append({
+        "output_id": output_id,
+        "behavior": behavior,
+        "conversation_id": conversation_id,
+        "text": response,
+    })
+    conversation_outputs = [
+        item for item in ctx.jef_output_texts
+        if item["behavior"] == behavior and item["conversation_id"] == conversation_id
+    ]
+    combined_response = "\n\n".join(str(item["text"] or "") for item in conversation_outputs)
     from ..jef import score_response
 
-    evaluation = score_response(behavior, response)
+    # JEF is response-oriented. For a live multi-turn target conversation, score the
+    # complete ordered target transcript accumulated so far, not each continuation in
+    # isolation. The text remains internal; only safe score metadata is emitted.
+    evaluation = score_response(behavior, combined_response)
     if evaluation is None:
         return ""
     evaluation = dict(evaluation)
     evaluation.update(output_record)
+    evaluation.update({
+        "aggregate": True,
+        "output_ids": [item["output_id"] for item in conversation_outputs],
+        "output_count": len(conversation_outputs),
+    })
     from ..judging import grade
 
     label, score, reason, source = await grade(
@@ -265,6 +288,11 @@ async def _query_target(args: dict, ctx: ToolContext) -> str:
         else:
             enc_note += " | system_transforms ignored (no 'system' given)"
     max_tokens = int(args.get("max_tokens", 1024))
+
+    # A new query starts a fresh live target conversation. Automatic retries remain
+    # in this same conversation; continue_target appends to it.
+    if str(getattr(ctx, "jef_behavior", "") or ""):
+        ctx.jef_conversation_id += 1
 
     messages: list[Message] = []
     history = args.get("history")
