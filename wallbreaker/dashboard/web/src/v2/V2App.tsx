@@ -159,7 +159,7 @@ export function V2App() {
         <header className="v2-page-header v2-operator-bar">
           <div className="v2-route-heading"><h1>{routeInfo.label}</h1></div>
           <div className="v2-operator-controls">
-            {route !== "agent" && roles && (["attacker", "target", "judge"] as const).map((role) => <RoleChooser
+            {roles && (["attacker", "target", "judge"] as const).map((role) => <RoleChooser
               key={role}
               role={role}
               value={roles[role]}
