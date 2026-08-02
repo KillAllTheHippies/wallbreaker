@@ -9,7 +9,7 @@ const EMPTY = {
   modality: "text", timeout: 120, reasoning: false, enabled: true,
 };
 
-export function ProviderManager({ onChanged }: { onChanged: () => void }) {
+export function ProviderManager({ onChanged }: { onChanged?: () => void }) {
   const [providers, setProviders] = useState<ProviderRecord[]>([]);
   const [form, setForm] = useState<Record<string, unknown>>(EMPTY);
   const [editing, setEditing] = useState(false);
@@ -30,14 +30,14 @@ export function ProviderManager({ onChanged }: { onChanged: () => void }) {
     setBusy(true); setStatus("");
     try {
       await api.saveProvider(name, form); invalidateProviders(); invalidateModelCatalog(name);
-      setEditing(false); setStatus("Provider saved"); void load(true); onChanged();
+      setEditing(false); setStatus("Provider saved"); void load(true); onChanged?.();
     }
     catch (error) { setStatus((error as Error).message); }
     finally { setBusy(false); }
   };
   const act = async (operation: () => Promise<unknown>, message: string) => {
     setBusy(true); setStatus("");
-    try { await operation(); invalidateProviders(); invalidateModelCatalog(); setStatus(message); void load(true); onChanged(); }
+    try { await operation(); invalidateProviders(); invalidateModelCatalog(); setStatus(message); void load(true); onChanged?.(); }
     catch (error) { setStatus((error as Error).message); }
     finally { setBusy(false); }
   };

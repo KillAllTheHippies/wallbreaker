@@ -409,14 +409,6 @@
 .v2-technique-table article i { display: block; height: 100%; background: var(--v2-teal); }
 .v2-technique-table article b { color: var(--v2-text); font: 9px var(--v2-mono); text-align: right; }
 .v2-report-preview { height: 360px; margin: 0; overflow: auto; padding: 14px; background: #090b0d; color: #d7d0cc; font: 9px/1.65 var(--v2-mono); white-space: pre-wrap; overflow-wrap: anywhere; }
-.v2-provider-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; padding: 13px; }
-.v2-provider-grid article { padding: 12px; border: 1px solid var(--v2-line-soft); border-radius: 4px; background: #0b0d0f; }
-.v2-provider-grid article > div:first-child { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-.v2-provider-grid h3 { margin: 0; font-size: 12px; }
-.v2-provider-grid .v2-button { width: 100%; margin-top: 8px; }
-.v2-provider-test-state { min-height: 28px; margin: 8px 0 0; padding: 7px 8px; border-left: 2px solid var(--v2-dim); background: #101215; color: var(--v2-muted); font: 9px/1.45 var(--v2-mono); }
-.v2-provider-test-state.verified { border-left-color: var(--v2-green); color: var(--v2-green); }
-.v2-provider-test-state.failed { border-left-color: var(--v2-red); color: #ff8d96; }
 .v2-inline-status { margin: 12px 14px; color: var(--v2-green); font-size: 10px; }
 .v2-settings-page { grid-template-columns: minmax(480px, 1.2fr) minmax(300px, .8fr); }
 .v2-safeguards { display: grid; gap: 0; }
@@ -445,7 +437,6 @@
   .v2-run-strip { grid-template-columns: minmax(120px, 1fr) minmax(105px, .8fr) minmax(105px, .8fr) minmax(120px, 1fr) 82px 100px auto; }
   .v2-run-strip .v2-strip-field:nth-of-type(6) { display: none; }
   .v2-strip-actions { padding-inline: 8px; }
-    .v2-provider-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .v2-operator-controls .role-chip { grid-template-columns: auto minmax(55px, 105px); }
     .v2-operator-controls .role-chip small { display: none; }
     .v2-active-run { display: none; }
@@ -495,7 +486,6 @@
   .v2-compose-grid > .v2-panel:first-child { overflow: hidden; }
   .v2-compose-grid > .v2-panel:nth-child(2) > .v2-conversation-thread { min-height: auto; max-height: calc(100vh - 210px); flex: initial; }
   .v2-capability-list, .v2-library-list, .v2-finding-list, .v2-run-list { max-height: 330px; }
-  .v2-provider-grid { grid-template-columns: 1fr; }
   .v2-report-grid { grid-template-columns: 1fr; }
   .v2-report-scope { grid-template-columns: 1fr; }
   .v2-report-scope > div:last-child { grid-column: auto; }

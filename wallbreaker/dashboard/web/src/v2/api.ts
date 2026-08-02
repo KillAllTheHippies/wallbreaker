@@ -294,7 +294,6 @@ export const v2Api = {
   findings: (runs?: string[]) => request<FindingRecord[]>(`/api/findings${runs?.length ? `?runs=${encodeURIComponent(runs.join(","))}` : ""}`),
   findingRuns: () => request<RunSummary[]>("/api/findings/runs"),
   providers: () => request<ProviderRecord[]>("/api/providers"),
-  testProvider: (name: string) => request<Record<string, unknown>>(`/api/providers/${encodeURIComponent(name)}/test`, { method: "POST" }),
   settings: () => request<SettingsRecord>("/api/settings"),
   saveSettings: (body: SettingsRecord) => request<SettingsRecord>("/api/settings", json(body)),
   historyRuns: (limit = 100) => request<{ items: Array<Record<string, unknown>>; total: number }>(`/api/v2/history/runs?limit=${limit}`),

@@ -4,7 +4,7 @@ import { JEFBehaviorPicker } from "./JEFBehaviorPicker";
 import { Profiles } from "../components/Profiles";
 import { ProviderManager } from "../components/ProviderManager";
 import { TargetOptions } from "../components/TargetOptions";
-import { EmptyState, ErrorBanner, JsonBlock, LoadingState, Panel, StatusBadge, VerdictBadge } from "./components";
+import { EmptyState, ErrorBanner, JsonBlock, LoadingState, Panel, VerdictBadge } from "./components";
 import { WorkflowStudio } from "./WorkflowStudio";
 import { RunsExplorer } from "./RunsExplorer";
 import { ReportsDashboard } from "./ReportsDashboard";
@@ -17,7 +17,6 @@ import type {
   ComposePayload,
   ComposeResult,
   FindingRecord,
-  ProviderRecord,
   SettingsRecord,
 } from "./types";
 
@@ -193,27 +192,10 @@ export function ReportsView() {
 }
 
 export function ModelsView() {
-  const [providers, setProviders] = useState<ProviderRecord[] | null>(null);
-  const [testing, setTesting] = useState("");
-  const [testResults, setTestResults] = useState<Record<string, { ok: boolean; message: string }>>({});
-  useEffect(() => { v2Api.providers().then(setProviders).catch(() => setProviders([])); }, []);
-  if (!providers) return <LoadingState label="Loading providers" />;
-  const refresh = () => v2Api.providers().then(setProviders).catch(() => setProviders([]));
-  return <div className="v2-page"><Panel title="Models and providers" meta={`${providers.length} configured`}>
-    {!providers.length && <EmptyState title="No providers configured" detail="Provider management remains available through the current dashboard until V2 configuration endpoints are active." />}
-    <div className="v2-provider-grid">{providers.map((provider) => <article key={provider.name}><div><h3>{provider.name}</h3><StatusBadge status={provider.enabled === false ? "paused" : "running"} /></div><dl className="v2-kv"><div><dt>Protocol</dt><dd>{provider.protocol || "--"}</dd></div><div><dt>Model</dt><dd>{provider.model || "--"}</dd></div><div><dt>Modality</dt><dd>{provider.modality || "--"}</dd></div><div><dt>Reasoning</dt><dd>{provider.reasoning ? "Enabled" : "Disabled"}</dd></div><div><dt>Credentials</dt><dd>{provider.has_api_key ? "Configured" : "Not reported"}</dd></div></dl><button type="button" className="v2-button" disabled={!!testing} onClick={async () => {
-      setTesting(provider.name);
-      setTestResults((current) => ({ ...current, [provider.name]: { ok: true, message: "Running authenticated inference…" } }));
-      try {
-        const result = await v2Api.testProvider(provider.name);
-        const inference = result.inference as Record<string, unknown> | undefined;
-        if (result.ok !== true || inference?.ok !== true) throw new Error("Authenticated inference failed");
-        setTestResults((current) => ({ ...current, [provider.name]: { ok: true, message: `Verified · ${String(result.model || provider.model)} · ${String(inference.latency_ms)} ms` } }));
-      } catch (reason) {
-        setTestResults((current) => ({ ...current, [provider.name]: { ok: false, message: `Failed · ${errorMessage(reason)}` } }));
-      } finally { setTesting(""); }
-    }}>{testing === provider.name ? "Verifying" : "Verify credentials"}</button>{testResults[provider.name] && <p className={`v2-provider-test-state ${testResults[provider.name].ok ? "verified" : "failed"}`} role="status">{testResults[provider.name].message}</p>}</article>)}</div>
-  </Panel><Panel title="Provider management" meta="Create, edit, enable, discover, and test"><ProviderManager onChanged={refresh} /></Panel><Panel title="Attacker, target, and judge profiles" meta="Reusable named role assignments"><Profiles onSaved={refresh} /></Panel></div>;
+  return <div className="v2-page">
+    <Panel title="Provider management" meta="Create, edit, enable, discover, and test"><ProviderManager /></Panel>
+    <Panel title="Attacker, target, and judge profiles" meta="Reusable named role assignments"><Profiles /></Panel>
+  </div>;
 }
 
 export function SettingsView() {
