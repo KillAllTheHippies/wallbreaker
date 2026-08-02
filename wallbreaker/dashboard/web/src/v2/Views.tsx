@@ -86,32 +86,19 @@ export function ComposeView() {
     try {
       const next = action === "preview" ? await v2Api.compose(body) : await v2Api.fire(body);
       setResult(next);
-      if (action === "fire" && next.conversation) {
-        setConversation(next.conversation);
-        setRequest("");
-      }
+      if (action === "fire" && next.conversation) setConversation(next.conversation);
     }
     catch (reason) { setError(errorMessage(reason)); }
     finally { setWorking(""); }
   };
 
-  const resetConversation = async (reuseSetup: boolean) => {
-    const message = reuseSetup
-      ? `Archive this ${conversation.turn_count}-turn conversation? Your opening request, system prompt, and settings will remain ready for the next thread.`
-      : `Archive this ${conversation.turn_count}-turn conversation and clear its setup? This also clears the opening request and system prompt.`;
-    if (conversation.active && !window.confirm(message)) return;
+  const beginNewTurn = async () => {
     setWorking("fire"); setError("");
     try {
       const next = await v2Api.resetConsoleConversation();
       setConversation(next);
       setResult(null);
-      if (reuseSetup) {
-        const pendingRequest = request;
-        applySetup(next.retained_setup, !pendingRequest.trim());
-        if (pendingRequest.trim()) setRequest(pendingRequest);
-      } else {
-        setRequest(""); setPreset(""); setSystem(""); setJefBehavior(""); setSelectedTransforms([]);
-      }
+      applySetup(next.retained_setup);
     } catch (reason) { setError(errorMessage(reason)); }
     finally { setWorking(""); }
   };
@@ -121,12 +108,12 @@ export function ComposeView() {
       {error && <ErrorBanner message={error} onDismiss={() => setError("")} />}
       <div className={`v2-compose-session ${conversation.active ? "active" : "fresh"}`}>
         <div><span>{conversation.active ? "ACTIVE THREAD" : "NEW THREAD"}</span><strong>{conversation.active ? `${conversation.turn_count} turn${conversation.turn_count === 1 ? "" : "s"} · follow-ups retain target context` : "The first delivery opens a multi-turn conversation"}</strong><small>{conversation.run_log || "A run log is created on the first delivery"}</small></div>
-        <div className="v2-inline-actions"><button type="button" className="v2-button" disabled={!conversation.active || !!working} onClick={() => void resetConversation(true)}>Archive &amp; reuse setup</button><button type="button" className="v2-text-button" disabled={!conversation.active || !!working} onClick={() => void resetConversation(false)}>Archive &amp; clear</button></div>
+        <div className="v2-inline-actions"><button type="button" className="v2-text-button" disabled={!request || !!working} onClick={() => setRequest("")}>Clear input</button>{conversation.active && <button type="button" className="v2-button" disabled={!!working} onClick={() => void beginNewTurn()}>New turn</button>}</div>
       </div>
       <div className="v2-form-grid">
         {!conversation.active && <JEFBehaviorPicker value={jefBehavior} onChange={setJefBehavior} />}
         <label className="v2-field v2-field-wide"><span>{conversation.active ? `Follow-up turn ${conversation.turn_count + 1}` : "First turn"}</span><textarea value={request} onChange={(event) => setRequest(event.target.value)} onKeyDown={(event) => { if (event.ctrlKey && event.key === "Enter") void submit("fire"); }} placeholder={conversation.active ? "Continue the same target conversation…  Ctrl Enter sends" : "Enter the authorized evaluation objective or request"} /></label>
-        <label className="v2-field"><span>Initial preset</span><select value={preset} disabled={conversation.active} onChange={(event) => setPreset(event.target.value)}><option value="">None</option>{presets.map((item) => <option key={item.name}>{item.name}</option>)}</select><small>{conversation.active ? "Locked until reset" : "Applied to the opening turn"}</small></label>
+        <label className="v2-field"><span>Initial preset</span><select value={preset} disabled={conversation.active} onChange={(event) => setPreset(event.target.value)}><option value="">None</option>{presets.map((item) => <option key={item.name}>{item.name}</option>)}</select><small>{conversation.active ? "Locked until new turn" : "Applied to the opening turn"}</small></label>
         <label className="v2-field"><span>Maximum tokens</span><input type="number" min={1} max={64000} value={maxTokens} onChange={(event) => setMaxTokens(Number(event.target.value))} /></label>
         <label className="v2-field v2-field-wide"><span>Initial system prompt override</span><textarea value={system} disabled={conversation.active} onChange={(event) => setSystem(event.target.value)} placeholder="Optional system prompt for the complete thread" /></label>
       </div>
@@ -139,8 +126,8 @@ export function ComposeView() {
         <button type="button" className="v2-button v2-button-primary" disabled={!request.trim() || !!working} onClick={() => submit("fire")}>{working === "fire" ? "Delivering" : conversation.active ? "Send follow-up" : "Open conversation"}</button>
       </div>
     </Panel>
-    <Panel title="Target conversation" meta={conversation.active ? `${conversation.turn_count} turns · archive when ready` : "No active conversation"}>
-      {!conversation.turns.length && !result && <EmptyState title="No conversation yet" detail="The first delivery opens a persistent target thread. Every later delivery is a contextual follow-up until you reset and archive it." />}
+    <Panel title="Target conversation" meta={conversation.active ? `${conversation.turn_count} turns · active conversation` : "No active conversation"}>
+      {!conversation.turns.length && !result && <EmptyState title="No conversation yet" detail="The first delivery opens a persistent target thread. Every later delivery is a contextual follow-up until you start a new turn." />}
       {!!conversation.turns.length && <div className="v2-conversation-thread">{conversation.turns.map((turn) => <article className="v2-conversation-turn" key={turn.index}>
         <div className="v2-turn-user"><header><span>YOU · TURN {turn.index}</span>{turn.transforms?.length ? <small>{turn.transforms.join(" + ")}</small> : null}</header><p>{turn.request}</p>{turn.payload !== turn.request && <details><summary>Transformed payload</summary><JsonBlock value={turn.payload} /></details>}</div>
         <div className="v2-turn-target"><header><span>TARGET</span>{turn.verdict && <VerdictBadge verdict={turn.verdict} />}</header><p>{turn.response}</p>{turn.jef_evaluation && <div className={`v2-jef-result ${turn.jef_evaluation.triggered ? "triggered" : ""}`} role="status"><strong>JEF {turn.jef_evaluation.behavior}</strong>{turn.jef_evaluation.status === "scored" ? <><span>{Number(turn.jef_evaluation.percentage || 0).toFixed(2)}% / {turn.jef_evaluation.threshold}% · {turn.jef_evaluation.triggered ? "threshold triggered" : "below threshold"}</span><details className="v2-jef-details"><summary>Scorer details</summary><JsonBlock value={{ score: turn.jef_evaluation.score, percentage: turn.jef_evaluation.percentage, threshold: turn.jef_evaluation.threshold, total_possible_score: turn.jef_evaluation.total_possible_score, matches: turn.jef_evaluation.matches || [], missing: turn.jef_evaluation.missing || [] }} /></details></> : <span>Evaluation unavailable</span>}</div>}</div>
