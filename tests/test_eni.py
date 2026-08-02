@@ -18,11 +18,11 @@ def test_eni_collection_present():
 
 
 def test_eni_find_file_substring():
-    # 'claude' should resolve a CLAUDE_* file, 'glm' should resolve ENI_GLM-5.2
+    # Shorthands resolve logical aliases to their real nested archive files.
     p = eni._find_file("claude")
-    assert p is not None and "CLAUDE" in p.stem.upper()
+    assert p is not None and "Anthropic" in p.parts and p.is_file()
     g = eni._find_file("glm")
-    assert g is not None and "GLM" in g.stem.upper()
+    assert g is not None and "GLM" in str(g).upper() and g.is_file()
 
 
 def _reg():

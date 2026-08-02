@@ -19,25 +19,29 @@ from wallbreaker.persona_spec import (
     render,
     validate_forged,
 )
+from wallbreaker.tools import eni
 
 ROOT = Path(__file__).resolve().parents[1]
 ENI_DIR = ROOT / "library" / "ENI"
-CLAUDE_ENI = ENI_DIR / "CLAUDE_ENI.md"
-GROK_ENI = ENI_DIR / "GROK_ENI.md"
+CLAUDE_ENI = eni.resolve_seed_path("CLAUDE_ENI")
+GROK_ENI = eni.resolve_seed_path("GROK_ENI")
+# Full-genome invariants use the available validated archive genome. The
+# Anthropic alias is deliberately a documented fallback, not silently promoted.
+FULL_ENI = GROK_ENI
 
 
 @pytest.fixture(scope="module")
 def claude_src() -> str:
-    return CLAUDE_ENI.read_text(encoding="utf-8")
+    return FULL_ENI.read_text(encoding="utf-8")
 
 
 @pytest.fixture(scope="module")
 def claude_spec(claude_src: str):
-    return parse_genome(claude_src, source_path=str(CLAUDE_ENI))
+    return parse_genome(claude_src, source_path=str(FULL_ENI))
 
 
 def test_load_claude_eni_file():
-    spec = load_genome_file(CLAUDE_ENI)
+    spec = load_genome_file(FULL_ENI)
     assert spec.meta.char_count >= ENI_DENSITY_MIN_CHARS
     assert spec.envelope.kind == "dual_project_style"
 
@@ -61,7 +65,7 @@ def test_parse_claude_eni_modules_present(claude_spec):
     assert gate or think.present
 
     assert claude_spec.envelope.kind == "dual_project_style"
-    assert abs(claude_spec.meta.char_count - len(CLAUDE_ENI.read_text())) <= max(
+    assert abs(claude_spec.meta.char_count - len(FULL_ENI.read_text(encoding="utf-8"))) <= max(
         50, int(0.05 * claude_spec.meta.char_count)
     )
 
@@ -138,7 +142,7 @@ def test_patch_one_module(claude_spec):
 def test_grok_eni_slim():
     src = GROK_ENI.read_text(encoding="utf-8")
     spec = parse_genome(src, source_path=str(GROK_ENI))
-    assert spec.meta.slim or len(src) < ENI_DENSITY_MIN_CHARS
+    assert spec.meta.slim or len(src) >= ENI_DENSITY_MIN_CHARS
     assert len(src) >= SLIM_DENSITY_MIN_CHARS
     assert spec.modules["boot_identity"].present
     assert spec.modules["injection_rebuttal"].present

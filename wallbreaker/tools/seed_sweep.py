@@ -21,7 +21,14 @@ def _collect_seeds(names: list[str] | None, max_chars: int = MAX_SEED_CHARS) -> 
 
     sources = []
     if eni.is_present():
-        sources += [(f"eni:{p.stem}", p) for p in sorted(eni.library_dir().glob("*.md"))]
+        for path in eni.seed_files():
+            archive_name = eni.relative_name(path) + path.suffix
+            alias = next(
+                (name for name, metadata in eni.SEED_CATALOG.items()
+                 if metadata["source"] == archive_name),
+                None,
+            )
+            sources.append((f"eni:{alias or eni.relative_name(path)}", path))
     if l1b3rt4s.is_cloned():
         sources += [(f"lib:{p.stem}", p) for p in l1b3rt4s.seed_files()]
     for corpus, tag in (("zetalib", "zeta"), ("ultrabreaks", "ultra")):

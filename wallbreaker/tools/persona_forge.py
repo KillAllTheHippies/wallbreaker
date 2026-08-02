@@ -100,16 +100,7 @@ def resolve_seed_path(name: str) -> Path | None:
     p = Path(name)
     if p.is_file():
         return p
-    stem = name.strip().removesuffix(".md")
-    if eni_lib.is_present():
-        lib = eni_lib.library_dir()
-        for model in eni_lib.list_models():
-            if model.lower() == stem.lower():
-                return lib / (model + ".md")
-        for model in eni_lib.list_models():
-            if stem.lower() in model.lower():
-                return lib / (model + ".md")
-    return None
+    return eni_lib.resolve_seed_path(name) if eni_lib.is_present() else None
 
 
 def load_fingerprint(ctx: ToolContext) -> dict:

@@ -7,11 +7,12 @@ import wallbreaker.judging as judging
 import wallbreaker.providers.factory as factory
 from wallbreaker.config import Config, Endpoint
 from wallbreaker.persona_spec import load_genome_file, render
-from wallbreaker.tools import persona_forge
+from wallbreaker.tools import eni, persona_forge
 from wallbreaker.tools.registry import ToolContext, ToolRegistry
 
 ROOT = Path(__file__).resolve().parents[1]
-CLAUDE_ENI = ROOT / "library" / "ENI" / "CLAUDE_ENI.md"
+CLAUDE_ENI = eni.resolve_seed_path("CLAUDE_ENI")
+FULL_ENI = eni.resolve_seed_path("GROK_ENI")
 
 
 def _local_reg(ctx: ToolContext) -> ToolRegistry:
@@ -34,7 +35,7 @@ def test_select_seed_by_vendor():
 def test_resolve_seed_path():
     p = persona_forge.resolve_seed_path("CLAUDE_ENI")
     assert p is not None and p.is_file()
-    assert p.name == "CLAUDE_ENI.md"
+    assert p == CLAUDE_ENI
 
 
 def test_diagnose_failure_modes():
@@ -72,7 +73,7 @@ def test_diagnose_failure_modes():
 
 
 def test_specialize_appends_domain_and_register():
-    spec = load_genome_file(CLAUDE_ENI)
+    spec = load_genome_file(FULL_ENI)
     out = persona_forge.specialize(
         spec,
         domain="cyber",

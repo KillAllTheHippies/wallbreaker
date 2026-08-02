@@ -80,6 +80,24 @@ python -m venv .venv
 pip install -e ".[dev]"        # add [barcodes] for the QR/barcode tool
 ```
 
+### Download external corpora
+
+The external jailbreak corpora are kept under the gitignored `library/` directory.
+From the repository root, run:
+
+```bash
+python scripts/ensure_corpora.py
+```
+
+This clones missing L1B3RT4S, ZetaLib, UltraBr3aks, and the
+`asgeirtj/system_prompts_leaks` checkout. It also stages
+`Goochbeater/Spiritual-Spell-Red-Teaming` and copies its `Jailbreak-Guide`
+files into `library/ENI`. Existing files are never overwritten. Add
+`--include-parsel` to also fetch the optional P4RS3LT0NGV3 transform repository.
+Use `--dry-run` to inspect what is missing first. If a destination directory
+exists but is not a Git checkout, the script reports a conflict and leaves it
+untouched.
+
 ## Configure
 
 ```bash
