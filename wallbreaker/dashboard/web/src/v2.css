@@ -732,11 +732,17 @@
 .v2-agent-launch-primary { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 8px; }
 .v2-agent-launch-primary textarea { min-height: 55px; max-height: 85px; resize: vertical; }
 .v2-agent-launch-primary > .v2-button { min-width: 94px; min-height: 34px; }
-.v2-agent-advanced { border-top: 1px solid var(--v2-line-soft); }
-.v2-agent-advanced > summary { display: grid; min-height: 31px; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 12px; cursor: pointer; color: var(--v2-muted); font-size: 9px; }
-.v2-agent-advanced > summary > span:first-child { color: var(--v2-text); font-weight: 550; }
-.v2-agent-advanced > summary > span:last-child { overflow: hidden; font: 8px var(--v2-mono); text-align: right; text-overflow: ellipsis; white-space: nowrap; }
-.v2-agent-advanced-body { display: grid; gap: 8px; padding: 7px 0 2px; }
+.v2-agent-advanced { border: 1px solid #383034; border-radius: 5px; background: #0c0e10; }
+.v2-agent-advanced > summary { display: grid; min-height: 38px; grid-template-columns: minmax(180px, .8fr) minmax(0, 1.2fr); align-items: center; gap: 12px; padding: 5px 9px; cursor: pointer; color: var(--v2-muted); font-size: 9px; list-style: none; }
+.v2-agent-advanced > summary::-webkit-details-marker { display: none; }
+.v2-agent-advanced > summary:hover { background: #151517; }
+.v2-agent-advanced > summary > span:first-child { display: grid; grid-template-columns: 16px auto; align-items: center; column-gap: 3px; color: var(--v2-text); }
+.v2-agent-advanced > summary > span:first-child i { grid-row: span 2; color: var(--v2-teal); font-size: 13px; font-style: normal; transition: transform 140ms ease; }
+.v2-agent-advanced[open] > summary > span:first-child i { transform: rotate(180deg); }
+.v2-agent-advanced > summary > span:first-child strong { font-size: 10px; }
+.v2-agent-advanced > summary > span:first-child small { color: var(--v2-dim); font-size: 8px; }
+.v2-agent-advanced > summary > span:last-child { overflow: hidden; padding-left: 9px; border-left: 1px solid var(--v2-line-soft); font: 8px var(--v2-mono); text-align: right; text-overflow: ellipsis; white-space: nowrap; }
+.v2-agent-advanced-body { display: grid; gap: 8px; padding: 9px; border-top: 1px solid var(--v2-line-soft); background: #101214; }
 .v2-agent-advanced-body .v2-form-grid { grid-template-columns: repeat(4, minmax(105px, 1fr)); gap: 8px; }
 .v2-agent-advanced-body .v2-technique-picker { min-height: 34px; }
 .v2-agent-advanced-body .v2-technique-trigger { min-height: 32px; }

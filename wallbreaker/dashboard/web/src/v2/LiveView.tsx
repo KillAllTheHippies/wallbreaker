@@ -500,7 +500,7 @@ function RunLauncher({ execution, onRefresh }: { execution: ExecutionSummary | n
         <button type="button" className="v2-button v2-button-primary" disabled={working || !objective.trim() || Boolean(active)} onClick={start}>{working ? "Starting" : "Start loop"}</button>
       </div>
       <details className="v2-agent-advanced">
-        <summary><span>Run settings</span><span>{maxRounds} rounds · {maxTokens.toLocaleString()} tokens · {concurrency} concurrent · {requestDelay} ms · {techniqueSummary}</span></summary>
+        <summary><span><i aria-hidden="true">⌄</i><strong>Run settings</strong><small>Configure limits and technique access</small></span><span>{maxRounds} rounds · {maxTokens.toLocaleString()} tokens · {concurrency} concurrent · {requestDelay} ms · {techniqueSummary}</span></summary>
         <div className="v2-agent-advanced-body">
           <div className="v2-form-grid">
             <label className="v2-field"><span>Maximum rounds</span><input type="number" min={1} max={50} value={maxRounds} onChange={(event) => setMaxRounds(Number(event.target.value))} /></label>
