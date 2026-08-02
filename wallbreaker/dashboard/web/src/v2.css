@@ -87,16 +87,17 @@
 .v2-main-live { overflow: hidden; }
 .v2-route-state { display: none; }
 .v2-route-state.active { display: contents; }
-.v2-page-header { display: flex; align-items: center; justify-content: space-between; min-height: 92px; padding: 18px 24px; border-bottom: 1px solid var(--v2-line); background: #0c0e10; }
+.v2-page-header { display: flex; align-items: center; justify-content: space-between; min-height: 58px; padding: 8px 18px; border-bottom: 1px solid var(--v2-line); background: #0c0e10; }
 .v2-page-header span { color: var(--v2-red); font-family: var(--v2-mono); font-size: 10px; letter-spacing: .12em; text-transform: uppercase; }
-.v2-page-header h1 { margin: 2px 0 0; font-size: 21px; font-weight: 650; }
+.v2-page-header h1 { margin: 0; font-size: 18px; font-weight: 650; }
 .v2-page-header p { margin: 2px 0 0; color: var(--v2-muted); font-size: 12px; }
-.v2-command-button { display: flex; align-items: center; gap: 12px; padding: 8px 9px 8px 13px; border: 1px solid var(--v2-line); border-radius: 5px; background: var(--v2-surface); color: var(--v2-muted); }
+.v2-command-button { display: flex; min-height: 31px; align-items: center; gap: 9px; padding: 5px 7px 5px 10px; border: 1px solid var(--v2-line); border-radius: 5px; background: var(--v2-surface); color: var(--v2-muted); }
 .v2-command-button kbd { padding: 3px 7px; border: 1px solid #4b3b3d; border-radius: 3px; background: var(--v2-bg); color: var(--v2-text); font-family: var(--v2-mono); font-size: 10px; }
-.v2-operator-bar { position: relative; z-index: 30; min-height: 78px; gap: 18px; padding-block: 10px; }
-.v2-route-heading { min-width: 145px; }
-.v2-operator-controls { display: flex; min-width: 0; align-items: center; justify-content: flex-end; gap: 7px; margin-left: auto; }
-.v2-operator-controls .role-chip { max-width: 205px; border-radius: 4px; }
+.v2-operator-bar { position: relative; z-index: 30; min-height: 58px; gap: 12px; padding-block: 6px; }
+.v2-route-heading { min-width: 72px; }
+.v2-operator-controls { display: flex; min-width: 0; align-items: center; justify-content: flex-end; gap: 5px; margin-left: auto; }
+.v2-operator-controls .role-chip { max-width: 175px; padding-block: 3px; border-radius: 4px; }
+.v2-operator-controls .role-chip small { display: none; }
 .v2-operator-controls .role-menu { color: var(--v2-text); }
 .v2-active-run { display: grid; min-width: 125px; max-width: 185px; gap: 3px; padding: 6px 9px; border: 1px solid var(--v2-line); border-radius: 4px; background: var(--v2-surface); text-align: left; }
 .v2-active-run strong { overflow: hidden; font-family: var(--v2-mono); font-size: 9px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
@@ -139,13 +140,15 @@
 .v2-live-selector select { width: 100%; min-height: 31px; padding: 0 10px; border: 1px solid var(--v2-line); border-radius: 4px; background: #111416; color: var(--v2-text); font: 9px var(--v2-mono); }
 .v2-live-selector select:focus { border-color: var(--v2-teal); outline: 0; }
 .v2-live:has(> .v2-launcher[open]) { overflow-y: auto; grid-template-rows: auto auto minmax(440px, 1fr) auto; }
-.v2-run-strip { display: grid; min-width: 0; min-height: 71px; grid-template-columns: minmax(125px, 1.1fr) minmax(110px, .85fr) minmax(110px, 1fr) minmax(125px, .9fr) 82px minmax(118px, .85fr) 95px auto; align-items: stretch; border-bottom: 1px solid var(--v2-line); background: #0b0d0f; }
-.v2-strip-field, .v2-strip-progress, .v2-strip-state { display: flex; min-width: 0; flex-direction: column; justify-content: center; gap: 4px; padding: 0 12px; border-right: 1px solid var(--v2-line-soft); }
+.v2-run-strip { display: grid; min-width: 0; min-height: 52px; grid-template-columns: minmax(135px, 1.1fr) minmax(120px, .85fr) minmax(120px, 1fr) minmax(135px, .9fr) 95px auto; align-items: stretch; border-bottom: 1px solid var(--v2-line); background: #0b0d0f; }
+.v2-run-strip .v2-strip-field:nth-of-type(5), .v2-run-strip .v2-strip-field:nth-of-type(6) { display: none; }
+.v2-strip-field, .v2-strip-progress, .v2-strip-state { display: flex; min-width: 0; flex-direction: column; justify-content: center; gap: 2px; padding: 0 10px; border-right: 1px solid var(--v2-line-soft); }
 .v2-strip-field span, .v2-strip-progress > span, .v2-strip-state > span:first-child { color: var(--v2-muted); font-size: 9px; }
 .v2-strip-field strong { overflow: hidden; font-family: var(--v2-mono); font-size: 10px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
 .v2-strip-progress div { width: 100%; height: 5px; overflow: hidden; border-radius: 3px; background: #38292a; }
 .v2-strip-progress i { display: block; height: 100%; background: var(--v2-teal); }
-.v2-strip-actions { display: flex; align-items: center; gap: 7px; padding: 0 12px; }
+.v2-strip-actions { display: flex; align-items: center; gap: 6px; padding: 0 9px; }
+.v2-run-strip .v2-button { min-height: 27px; padding-inline: 9px; }
 .v2-live > .v2-error { margin: 8px 10px 0; }
 .v2-live-grid { display: grid; min-width: 0; min-height: 0; grid-template-columns: minmax(600px, 1fr) minmax(320px, 390px); overflow: hidden; }
 .v2-observatory { display: grid; min-width: 0; min-height: 0; grid-template-rows: auto minmax(260px, 1fr); overflow: hidden; }
@@ -729,8 +732,9 @@
 .v2-agent-launch > summary small { overflow: hidden; color: var(--v2-muted); font-size: 9px; font-weight: 400; text-overflow: ellipsis; white-space: nowrap; }
 .v2-agent-launch > summary > span:last-child { flex: 0 0 auto; color: var(--v2-teal); font: 8px var(--v2-mono); letter-spacing: .08em; text-transform: uppercase; }
 .v2-agent-launch-body { display: grid; gap: 7px; padding: 0 10px 10px; }
-.v2-agent-launch-primary { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 8px; }
-.v2-agent-launch-primary textarea { min-height: 55px; max-height: 85px; resize: vertical; }
+.v2-agent-launch-primary { display: grid; grid-template-columns: minmax(260px, 1fr) auto; align-items: end; gap: 8px; }
+.v2-agent-objective { grid-column: 1 / -1; }
+.v2-agent-launch-primary textarea { min-height: 64px; max-height: 110px; resize: vertical; }
 .v2-agent-launch-primary > .v2-button { min-width: 94px; min-height: 34px; }
 .v2-agent-advanced { border: 1px solid #383034; border-radius: 5px; background: #0c0e10; }
 .v2-agent-advanced > summary { display: grid; min-height: 38px; grid-template-columns: minmax(180px, .8fr) minmax(0, 1.2fr); align-items: center; gap: 12px; padding: 5px 9px; cursor: pointer; color: var(--v2-muted); font-size: 9px; list-style: none; }

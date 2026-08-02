@@ -130,7 +130,7 @@ export function V2App() {
       <div className="v2-shell">
         <header className="v2-mobile-header"><button type="button" onClick={() => setRailOpen(true)} aria-label="Open navigation">Menu</button><div className="v2-brand"><span aria-hidden="true">◆</span><strong>WALL<b>BREAKER</b></strong></div><button type="button" onClick={() => setPaletteOpen(true)}>Commands</button></header>
         <header className="v2-page-header v2-operator-bar">
-          <div className="v2-route-heading"><span>Wallbreaker V2</span><h1>{routeInfo.label}</h1><p>{routeInfo.description}</p></div>
+          <div className="v2-route-heading"><h1>{routeInfo.label}</h1></div>
           <div className="v2-operator-controls">
             {roles && (["attacker", "target", "judge"] as const).map((role) => <RoleChooser
               key={role}
@@ -138,12 +138,6 @@ export function V2App() {
               value={roles[role]}
               onSaved={() => { refreshRoles(); refreshExecutions(); }}
             />)}
-            {selectedExecution && <button
-              type="button"
-              className="v2-active-run"
-              onClick={() => navigate(isActive(selectedExecution) ? "agent" : "live")}
-              title={isActive(selectedExecution) ? "Open the active run in Agent" : "Inspect this run in Live"}
-            ><StatusBadge status={selectedExecution.status} /><strong>{selectedExecution.title || selectedExecution.id}</strong></button>}
             <button type="button" className="v2-command-button" onClick={() => setPaletteOpen(true)}>Commands <kbd>Ctrl K</kbd></button>
           </div>
         </header>

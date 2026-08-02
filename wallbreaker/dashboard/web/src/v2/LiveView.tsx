@@ -495,8 +495,8 @@ function RunLauncher({ execution, onRefresh }: { execution: ExecutionSummary | n
     <summary><span><strong>{active ? "Current engagement" : "New engagement"}</strong><small>{active ? "Launch controls are available when this run ends" : "Set the objective, then start the agent loop"}</small></span><span>{active ? "In progress" : "Ready"}</span></summary>
     <div className="v2-agent-launch-body">
       <div className="v2-agent-launch-primary">
+        <label className="v2-field v2-agent-objective"><span>Objective</span><textarea value={objective} onChange={(event) => setObjective(event.target.value)} placeholder="Describe the authorized evaluation objective" /></label>
         <JEFBehaviorPicker value={jefBehavior} onChange={setJefBehavior} disabled={Boolean(active)} />
-        <label className="v2-field"><span>Objective</span><textarea value={objective} onChange={(event) => setObjective(event.target.value)} placeholder="Describe the authorized evaluation objective" /></label>
         <button type="button" className="v2-button v2-button-primary" disabled={working || !objective.trim() || Boolean(active)} onClick={start}>{working ? "Starting" : "Start loop"}</button>
       </div>
       <details className="v2-agent-advanced">
