@@ -13,6 +13,7 @@ import type {
   ArsenalItem,
   Capability,
   ConsoleConversation,
+  ComposePayload,
   ComposeResult,
   FindingRecord,
   ProviderRecord,
@@ -52,10 +53,21 @@ export function ComposeView() {
   const [working, setWorking] = useState<"preview" | "fire" | "">("");
   const [error, setError] = useState("");
 
+  const applySetup = (setup?: ComposePayload, restoreRequest = false) => {
+    if (!setup) return;
+    if (restoreRequest) setRequest(setup.request || "");
+    setPreset(setup.preset || "");
+    setSelectedTransforms(setup.transforms || []);
+    setSystem(setup.system || "");
+    setJefBehavior(setup.jef_behavior || "");
+    if (setup.max_tokens) setMaxTokens(setup.max_tokens);
+  };
+
   useEffect(() => {
     v2Api.consoleConversation().then((next) => {
       setConversation(next);
-      setJefBehavior(next.jef_behavior || "");
+      applySetup(next.opening);
+      if (!next.opening) setJefBehavior(next.jef_behavior || "");
     }).catch(() => undefined);
   }, []);
 
@@ -83,13 +95,23 @@ export function ComposeView() {
     finally { setWorking(""); }
   };
 
-  const resetConversation = async () => {
-    if (conversation.active && !window.confirm(`Reset and archive this ${conversation.turn_count}-turn conversation?`)) return;
+  const resetConversation = async (reuseSetup: boolean) => {
+    const message = reuseSetup
+      ? `Archive this ${conversation.turn_count}-turn conversation? Your opening request, system prompt, and settings will remain ready for the next thread.`
+      : `Archive this ${conversation.turn_count}-turn conversation and clear its setup? This also clears the opening request and system prompt.`;
+    if (conversation.active && !window.confirm(message)) return;
     setWorking("fire"); setError("");
     try {
       const next = await v2Api.resetConsoleConversation();
       setConversation(next);
-      setResult(null); setRequest(""); setPreset(""); setSystem(""); setJefBehavior(""); setSelectedTransforms([]);
+      setResult(null);
+      if (reuseSetup) {
+        const pendingRequest = request;
+        applySetup(next.retained_setup, !pendingRequest.trim());
+        if (pendingRequest.trim()) setRequest(pendingRequest);
+      } else {
+        setRequest(""); setPreset(""); setSystem(""); setJefBehavior(""); setSelectedTransforms([]);
+      }
     } catch (reason) { setError(errorMessage(reason)); }
     finally { setWorking(""); }
   };
@@ -99,7 +121,7 @@ export function ComposeView() {
       {error && <ErrorBanner message={error} onDismiss={() => setError("")} />}
       <div className={`v2-compose-session ${conversation.active ? "active" : "fresh"}`}>
         <div><span>{conversation.active ? "ACTIVE THREAD" : "NEW THREAD"}</span><strong>{conversation.active ? `${conversation.turn_count} turn${conversation.turn_count === 1 ? "" : "s"} · follow-ups retain target context` : "The first delivery opens a multi-turn conversation"}</strong><small>{conversation.run_log || "A run log is created on the first delivery"}</small></div>
-        <button type="button" className="v2-button" disabled={!conversation.active || !!working} onClick={resetConversation}>Reset &amp; archive</button>
+        <div className="v2-inline-actions"><button type="button" className="v2-button" disabled={!conversation.active || !!working} onClick={() => void resetConversation(true)}>Archive &amp; reuse setup</button><button type="button" className="v2-text-button" disabled={!conversation.active || !!working} onClick={() => void resetConversation(false)}>Archive &amp; clear</button></div>
       </div>
       <div className="v2-form-grid">
         {!conversation.active && <JEFBehaviorPicker value={jefBehavior} onChange={setJefBehavior} />}
@@ -117,7 +139,7 @@ export function ComposeView() {
         <button type="button" className="v2-button v2-button-primary" disabled={!request.trim() || !!working} onClick={() => submit("fire")}>{working === "fire" ? "Delivering" : conversation.active ? "Send follow-up" : "Open conversation"}</button>
       </div>
     </Panel>
-    <Panel title="Target conversation" meta={conversation.active ? `${conversation.turn_count} turns · reset to archive` : "No active conversation"}>
+    <Panel title="Target conversation" meta={conversation.active ? `${conversation.turn_count} turns · archive when ready` : "No active conversation"}>
       {!conversation.turns.length && !result && <EmptyState title="No conversation yet" detail="The first delivery opens a persistent target thread. Every later delivery is a contextual follow-up until you reset and archive it." />}
       {!!conversation.turns.length && <div className="v2-conversation-thread">{conversation.turns.map((turn) => <article className="v2-conversation-turn" key={turn.index}>
         <div className="v2-turn-user"><header><span>YOU · TURN {turn.index}</span>{turn.transforms?.length ? <small>{turn.transforms.join(" + ")}</small> : null}</header><p>{turn.request}</p>{turn.payload !== turn.request && <details><summary>Transformed payload</summary><JsonBlock value={turn.payload} /></details>}</div>

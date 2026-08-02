@@ -765,6 +765,7 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
         "run_config": None,
         "role_meta": {},
         "jef_behavior": "",
+        "opening": {},
         "turns": [],
     }
     provider_registry = None
@@ -1309,6 +1310,7 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
             "turns": turns,
             "run_log": runlog.path.name if runlog._started else "",
             "jef_behavior": str(console_conversation.get("jef_behavior") or ""),
+            "opening": dict(console_conversation.get("opening") or {}),
         }
 
     def _new_console_runlog(previous) -> object:
@@ -1330,6 +1332,7 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
             raise HTTPException(status_code=409, detail="wait for the current turn to finish before resetting")
         runlog = console_conversation["runlog"]
         turns = list(console_conversation["turns"])
+        retained_setup = dict(console_conversation.get("opening") or {})
         archived = ""
         if turns:
             runlog.event("conversation_archived", turn_count=len(turns))
@@ -1340,9 +1343,15 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
             "run_config": None,
             "role_meta": {},
             "jef_behavior": "",
+            "opening": {},
             "turns": [],
         })
-        return {"ok": True, "archived_run": archived, **_console_conversation_view()}
+        return {
+            "ok": True,
+            "archived_run": archived,
+            "retained_setup": retained_setup,
+            **_console_conversation_view(),
+        }
 
     @app.post("/api/fire")
     async def fire(body: dict):
@@ -1465,6 +1474,14 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
         }
         if not is_followup:
             console_conversation["jef_behavior"] = composed["jef_behavior"]
+            console_conversation["opening"] = {
+                "request": composed["request"],
+                "preset": composed["preset"],
+                "transforms": list(composed["transforms"]),
+                "system": composed["system"],
+                "max_tokens": composed["max_tokens"],
+                "jef_behavior": composed["jef_behavior"],
+            }
         console_conversation["turns"].append(turn)
         return {
             **composed,

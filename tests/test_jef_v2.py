@@ -108,6 +108,10 @@ def test_compose_conversation_retains_jef_behavior_and_run_metadata(monkeypatch,
     assert first["turn"]["jef_behavior"] == "harry_potter"
     assert second["turn"]["jef_behavior"] == "harry_potter"
     assert state["jef_behavior"] == "harry_potter"
+    assert state["opening"] == {
+        "request": "first", "preset": "", "transforms": [], "system": "",
+        "max_tokens": 1024, "jef_behavior": "harry_potter",
+    }
     assert registries[0].calls[1][1]["prompt"] == "follow up"
     changed = client.post(
         "/api/fire", json={"request": "changed", "jef_behavior": "fentanyl"}
@@ -117,6 +121,8 @@ def test_compose_conversation_retains_jef_behavior_and_run_metadata(monkeypatch,
 
     reset = client.post("/api/console/conversation/reset").json()
     assert reset["jef_behavior"] == ""
+    assert reset["retained_setup"] == state["opening"]
+    assert reset["opening"] == {}
     records = [
         json.loads(line)
         for line in (sessions / reset["archived_run"]).read_text(encoding="utf-8").splitlines()

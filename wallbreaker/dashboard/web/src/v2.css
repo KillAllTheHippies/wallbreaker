@@ -268,6 +268,8 @@
 .v2-compose-session strong { overflow: hidden; color: var(--v2-text); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
 .v2-compose-session small { overflow: hidden; color: var(--v2-dim); font: 8px var(--v2-mono); text-overflow: ellipsis; white-space: nowrap; }
 .v2-compose-session .v2-button { flex: 0 0 auto; }
+.v2-inline-actions { display: flex !important; align-items: center; gap: 10px; }
+.v2-inline-actions .v2-text-button { flex: 0 0 auto; font-size: 10px; }
 .v2-field :disabled { cursor: not-allowed; opacity: .55; }
 .v2-conversation-thread { max-height: calc(100vh - 210px); overflow: auto; padding: 12px; }
 .v2-conversation-turn { display: grid; gap: 8px; margin-bottom: 15px; }

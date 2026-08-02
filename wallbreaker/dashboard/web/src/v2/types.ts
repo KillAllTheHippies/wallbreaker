@@ -220,6 +220,8 @@ export interface ConsoleConversation {
   run_log: string;
   jef_behavior?: string;
   archived_run?: string;
+  opening?: ComposePayload;
+  retained_setup?: ComposePayload;
 }
 
 export interface ComposeResult extends ComposePayload {
