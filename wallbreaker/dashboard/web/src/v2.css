@@ -341,6 +341,9 @@
 .v2-result-stack .v2-verdict { margin: 0 10px 8px; }
 
 .v2-capability-list, .v2-library-list, .v2-finding-list, .v2-run-list { max-height: calc(100vh - 230px); overflow: auto; }
+.v2-findings-page { height: calc(100vh - 58px); min-height: 0; grid-template-rows: minmax(0, 1fr); align-content: stretch; }
+.v2-findings-panel { display: flex; min-height: 0; flex-direction: column; }
+.v2-findings-panel .v2-finding-list { min-height: 0; max-height: none; flex: 1; overscroll-behavior: contain; }
 .v2-finding-inspector { display: flex; min-height: 0; flex-direction: column; }
 .v2-finding-inspector > .v2-code { min-height: 0; max-height: none; flex: 1; }
 .v2-capability-list > button, .v2-library-list > button, .v2-finding-list > button, .v2-run-list > button { display: grid; width: 100%; min-width: 0; gap: 4px; padding: 10px 12px; border: 0; border-bottom: 1px solid var(--v2-line-soft); background: transparent; text-align: left; }
@@ -364,7 +367,7 @@
 .v2-bookmark-row span { color: var(--v2-muted); font-size: 10px; }
 .v2-bookmark-row small { color: var(--v2-dim); font-family: var(--v2-mono); font-size: 9px; }
 .v2-finding-list .v2-row-select > div { display: flex; align-items: center; gap: 8px; }
-.v2-finding-list .v2-row-select strong { white-space: normal; }
+.v2-finding-list .v2-row-select strong { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 5; white-space: normal; }
 .v2-bookmark-button { display: inline-grid; width: 28px; height: 28px; flex: 0 0 28px; place-items: center; padding: 0; border: 1px solid transparent; border-radius: 4px; background: transparent; color: var(--v2-dim); cursor: pointer; font-size: 15px; line-height: 1; }
 .v2-bookmark-button:hover { border-color: var(--v2-line); background: var(--v2-surface-raised); color: var(--v2-amber); }
 .v2-bookmark-button.active { color: var(--v2-amber); }
@@ -484,6 +487,8 @@
   .v2-inspector { min-height: 480px; border-top: 1px solid var(--v2-line); }
   .v2-steer { position: sticky; z-index: 9; bottom: 0; min-height: 125px; }
   .v2-compose-grid, .v2-workflow-grid, .v2-library-grid, .v2-runs-grid { grid-template-columns: 1fr; }
+  .v2-findings-page { height: auto; }
+  .v2-findings-panel .v2-finding-list { max-height: 330px; flex: initial; }
   .v2-compose-grid { height: auto; min-height: 100%; grid-template-rows: auto; overflow: visible; }
   .v2-compose-grid > .v2-panel:first-child { overflow: hidden; }
   .v2-compose-grid > .v2-panel:nth-child(2) > .v2-conversation-thread { min-height: auto; max-height: calc(100vh - 210px); flex: initial; }

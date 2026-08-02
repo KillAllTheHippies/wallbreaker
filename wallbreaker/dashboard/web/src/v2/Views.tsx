@@ -166,8 +166,8 @@ export function FindingsView() {
   if (!findings) return <LoadingState label="Loading findings" />;
   const verdicts = [...new Set(findings.map((item) => item.label).filter(Boolean) as string[])];
   const filtered = findings.filter((item) => (!bookmarkedOnly || bookmarks.isBookmarked("finding", findingBookmarkKey(item))) && (verdict === "all" || item.label === verdict) && (!query || `${item.technique || ""} ${item.reason || ""} ${item.response || ""} ${item.run || ""}`.toLowerCase().includes(query.toLowerCase())));
-  return <div className="v2-page v2-library-grid">
-    <Panel title="Findings" meta={`${filtered.length} evidence records`}>
+  return <div className="v2-page v2-library-grid v2-findings-page">
+    <Panel className="v2-findings-panel" title="Findings" meta={`${filtered.length} evidence records`}>
       {error && <ErrorBanner message={error} onDismiss={() => setError("")} />}
       <div className="v2-filterbar"><input aria-label="Search findings" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search evidence, technique, run" /><select aria-label="Finding verdict" value={verdict} onChange={(event) => setVerdict(event.target.value)}><option value="all">All verdicts</option>{verdicts.map((value) => <option key={value}>{value}</option>)}</select><button type="button" className={`v2-button v2-button-small ${bookmarkedOnly ? "active" : ""}`} aria-pressed={bookmarkedOnly} onClick={() => setBookmarkedOnly((current) => !current)}>★ Bookmarked</button></div>
       {bookmarks.error && <ErrorBanner message={bookmarks.error} />}
