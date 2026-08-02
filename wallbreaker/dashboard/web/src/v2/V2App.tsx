@@ -29,6 +29,7 @@ function isActive(execution: ExecutionSummary) {
 export function V2App() {
   const [route, setRouteState] = useState<V2Route>(routeFromLocation);
   const [railOpen, setRailOpen] = useState(false);
+  const [railCollapsed, setRailCollapsed] = useState(() => window.localStorage.getItem("wallbreaker-v2-rail-collapsed") === "true");
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [capabilities, setCapabilities] = useState<Capability[]>([]);
   const [capabilitySource, setCapabilitySource] = useState<"v2" | "legacy">("legacy");
@@ -66,6 +67,10 @@ export function V2App() {
     window.addEventListener("hashchange", update);
     return () => window.removeEventListener("hashchange", update);
   }, []);
+
+  useEffect(() => {
+    window.localStorage.setItem("wallbreaker-v2-rail-collapsed", String(railCollapsed));
+  }, [railCollapsed]);
 
   useEffect(() => {
     const open = (event: KeyboardEvent) => {
@@ -111,11 +116,11 @@ export function V2App() {
   const routeInfo = ROUTES.find((item) => item.id === route) || ROUTES[0];
 
   return (
-    <div className="v2-root">
+    <div className={`v2-root ${railCollapsed ? "v2-rail-collapsed" : ""}`}>
       <a className="v2-skip" href="#v2-main">Skip to main content</a>
       <aside className={`v2-rail ${railOpen ? "open" : ""}`} aria-label="V2 navigation">
-        <div className="v2-brand"><span aria-hidden="true">◆</span><strong>WALL<b>BREAKER</b></strong><small>V2</small><button type="button" aria-label="Close navigation" onClick={() => setRailOpen(false)}>Close</button></div>
-        <nav>{ROUTES.map((item) => <button type="button" key={item.id} className={route === item.id ? "active" : ""} aria-current={route === item.id ? "page" : undefined} onClick={() => navigate(item.id)}><span aria-hidden="true">●</span>{item.label}</button>)}</nav>
+        <div className="v2-brand"><span aria-hidden="true">◆</span><strong>WALL<b>BREAKER</b></strong><small>V2</small><button className="v2-rail-toggle" type="button" aria-label={railCollapsed ? "Expand sidebar" : "Collapse sidebar"} aria-expanded={!railCollapsed} onClick={() => setRailCollapsed((collapsed) => !collapsed)}>{railCollapsed ? "›" : "‹"}</button><button className="v2-rail-close" type="button" aria-label="Close navigation" onClick={() => setRailOpen(false)}>Close</button></div>
+        <nav>{ROUTES.map((item) => <button type="button" key={item.id} className={route === item.id ? "active" : ""} aria-current={route === item.id ? "page" : undefined} aria-label={item.label} title={item.label} onClick={() => navigate(item.id)}><span aria-hidden="true">{item.label.slice(0, 1)}</span><b>{item.label}</b></button>)}</nav>
         <section className="v2-rail-section" aria-label="Active executions">
           <header><span>Active run</span><span>{activeExecutions.length}</span></header>
           {!activeExecutions.length && <p>No active execution</p>}
