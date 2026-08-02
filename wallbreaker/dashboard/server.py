@@ -1405,6 +1405,7 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
                     raise HTTPException(status_code=400, detail=str(exc)) from exc
                 raise
             reg = build_registry(run_config)
+            reg.ctx.jef_behavior = composed["jef_behavior"]
             console_conversation.update({
                 "registry": reg,
                 "run_config": run_config,
@@ -1438,6 +1439,7 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
             with inference_logging(console_runlog):
                 result = await reg.execute(tool_name, args)
         verdict = _extract_verdict(result.content)
+        jef_evaluation = reg.ctx.jef_evaluations[-1] if reg.ctx.jef_evaluations else None
         target = run_config.target
         console_runlog.event(
             "attack_fire",
@@ -1451,6 +1453,7 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
             transforms=composed["transforms"],
             system=composed["system"],
             jef_behavior=composed["jef_behavior"],
+            jef_evaluation=jef_evaluation,
             is_error=result.is_error,
             max_tokens=composed["max_tokens"],
             target_model=getattr(target, "model", "") if target else "",
@@ -1470,6 +1473,7 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
             "preset": composed["preset"],
             "transforms": composed["transforms"],
             "jef_behavior": composed["jef_behavior"],
+            "jef_evaluation": jef_evaluation,
             "continuation": is_followup,
         }
         if not is_followup:
@@ -1489,6 +1493,7 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
             "response": result.content,
             "is_error": result.is_error,
             "verdict": verdict,
+            "jef_evaluation": jef_evaluation,
             "run_log": console_runlog.path.name,
             "turn": turn,
             "conversation": _console_conversation_view(),
@@ -1732,6 +1737,7 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
 
         registry.ctx.progress = progress
         registry.ctx.run_events = tool_run_event
+        registry.ctx.jef_behavior = jef_behavior["id"] if jef_behavior else ""
         registry.ctx.record = lambda p, r, lbl, rs, t: runlog.verdict(
             p, r, lbl, rs, t,
             target_model=getattr(run_config.target, "model", "") if run_config.target else "",

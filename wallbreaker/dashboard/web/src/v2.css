@@ -276,6 +276,8 @@
 .v2-turn-user, .v2-turn-target { max-width: 90%; padding: 10px 12px; border: 1px solid var(--v2-line-soft); border-radius: 5px; background: #111316; }
 .v2-turn-user { margin-left: auto; border-color: #315c57; background: #0e1b1a; }
 .v2-turn-target { margin-right: auto; border-color: #593238; background: #171113; }
+.v2-jef-result { display: flex; gap: 8px; align-items: baseline; margin-top: 9px; padding-top: 8px; border-top: 1px solid var(--v2-line-soft); color: var(--v2-teal); font: 9px var(--v2-mono); }
+.v2-jef-result.triggered { color: var(--v2-red); }
 .v2-conversation-turn header, .v2-turn-preview header { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .v2-conversation-turn header > span { color: var(--v2-muted); font: 8px var(--v2-mono); letter-spacing: .08em; }
 .v2-conversation-turn header small { color: var(--v2-teal); font: 8px var(--v2-mono); }

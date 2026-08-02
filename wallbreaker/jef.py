@@ -7,6 +7,8 @@ existing authorized agent objective and retained as run metadata.
 
 from __future__ import annotations
 
+import contextlib
+import io
 from types import MappingProxyType
 from typing import Any
 
@@ -142,6 +144,54 @@ def objective_for_behavior(objective: str, behavior_id: str | None) -> tuple[str
     return objective, behavior
 
 
+def score_response(behavior_id: str | None, response: str) -> dict[str, Any] | None:
+    """Run the selected JEF scorer against returned model text only.
+
+    The public result deliberately omits scorer matches and missing criteria: those
+    details are rubric-derived and do not belong in dashboard events or run logs.
+    """
+    behavior = get_behavior(behavior_id)
+    if behavior is None:
+        return None
+    try:
+        from jef.registry import score
+
+        # Some JEF module wrappers print their selected score version. Keep that
+        # implementation detail out of the dashboard process output.
+        with contextlib.redirect_stdout(io.StringIO()):
+            raw = score(behavior["id"], str(response or ""))
+    except Exception as exc:  # noqa: BLE001
+        return {
+            "behavior": behavior["id"],
+            "title": behavior["title"],
+            "threshold": behavior["threshold"],
+            "status": "unavailable",
+            "error": f"{type(exc).__name__}: {str(exc)[:160]}",
+        }
+    if not isinstance(raw, dict):
+        raw = {"score": raw}
+    score_value = raw.get("score", 0)
+    percentage = raw.get("percentage", score_value)
+    try:
+        score_number = float(score_value)
+    except (TypeError, ValueError):
+        score_number = 0.0
+    try:
+        percentage_number = float(percentage)
+    except (TypeError, ValueError):
+        percentage_number = 0.0
+    threshold = int(behavior["threshold"])
+    return {
+        "behavior": behavior["id"],
+        "title": behavior["title"],
+        "threshold": threshold,
+        "score": score_number,
+        "percentage": percentage_number,
+        "triggered": percentage_number >= threshold,
+        "status": "scored",
+    }
+
+
 __all__ = [
     "JEF_BEHAVIORS",
     "JEF_BEHAVIOR_IDS",
@@ -150,4 +200,5 @@ __all__ = [
     "get_behavior",
     "jef_version",
     "objective_for_behavior",
+    "score_response",
 ]

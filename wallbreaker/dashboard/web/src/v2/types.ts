@@ -210,6 +210,7 @@ export interface ConversationTurn {
   preset?: string;
   transforms?: string[];
   jef_behavior?: string;
+  jef_evaluation?: JEFEvaluation;
   continuation: boolean;
 }
 
@@ -224,12 +225,24 @@ export interface ConsoleConversation {
   retained_setup?: ComposePayload;
 }
 
+export interface JEFEvaluation {
+  behavior: string;
+  title?: string;
+  threshold: number;
+  score?: number;
+  percentage?: number;
+  triggered?: boolean;
+  status: "scored" | "unavailable";
+  error?: string;
+}
+
 export interface ComposeResult extends ComposePayload {
   prompt?: string;
   payload: string;
   source?: string;
   response?: string;
   verdict?: string;
+  jef_evaluation?: JEFEvaluation;
   is_error?: boolean;
   run_log?: string;
   turn?: ConversationTurn;
