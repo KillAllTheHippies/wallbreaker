@@ -281,8 +281,19 @@
 .v2-turn-user, .v2-turn-target { max-width: 90%; padding: 10px 12px; border: 1px solid var(--v2-line-soft); border-radius: 5px; background: #111316; }
 .v2-turn-user { margin-left: auto; border-color: #315c57; background: #0e1b1a; }
 .v2-turn-target { margin-right: auto; border-color: #593238; background: #171113; }
-.v2-jef-result { display: flex; gap: 8px; align-items: baseline; margin-top: 9px; padding-top: 8px; border-top: 1px solid var(--v2-line-soft); color: var(--v2-teal); font: 9px var(--v2-mono); }
+.v2-jef-result { display: grid; gap: 9px; margin-top: 12px; padding: 11px; border: 1px solid #285f58; border-radius: 4px; background: #0c1716; color: var(--v2-teal); font: 9px var(--v2-mono); }
 .v2-jef-result.triggered { color: var(--v2-red); }
+.v2-jef-result > header { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.v2-jef-result > header span { color: currentColor; font-size: 8px; }
+.v2-jef-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 7px; margin: 0; }
+.v2-jef-metrics > div { display: grid; gap: 2px; padding: 6px 7px; border: 1px solid #28504a; background: #0a1212; }
+.v2-jef-metrics dt { color: var(--v2-muted); font-size: 8px; }
+.v2-jef-metrics dd { margin: 0; color: var(--v2-text); font-size: 10px; }
+.v2-jef-criteria { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.v2-jef-criteria > div { min-width: 0; padding: 8px; border-top: 1px solid #28504a; }
+.v2-jef-criteria strong { color: var(--v2-text); font-size: 8px; }
+.v2-jef-criteria ul { display: grid; gap: 4px; margin: 7px 0 0; padding-left: 15px; color: #c8d6d4; line-height: 1.4; }
+.v2-jef-criteria p { margin: 7px 0 0; color: var(--v2-muted); }
 .v2-conversation-turn header, .v2-turn-preview header { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .v2-conversation-turn header > span { color: var(--v2-muted); font: 8px var(--v2-mono); letter-spacing: .08em; }
 .v2-conversation-turn header small { color: var(--v2-teal); font: 8px var(--v2-mono); }
@@ -779,9 +790,6 @@
 
 .v2-agent > .v2-steer { min-height: 102px; padding-block: 7px 8px; }
 .v2-agent > .v2-steer .v2-steer-row textarea { min-height: 42px; }
-.v2-jef-details { width: 100%; margin-top: 4px; }
-.v2-jef-details > summary { cursor: pointer; color: var(--v2-muted); font: 8px var(--v2-mono); }
-.v2-jef-details .v2-code { max-height: 220px; margin-top: 6px; }
 
 @media (max-width: 900px) {
   .v2-agent { height: auto; min-height: 100%; overflow: visible; }

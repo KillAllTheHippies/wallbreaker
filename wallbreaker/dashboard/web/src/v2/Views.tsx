@@ -16,6 +16,7 @@ import type {
   ComposePayload,
   ComposeResult,
   FindingRecord,
+  JEFEvaluation,
   ProviderRecord,
   SettingsRecord,
 } from "./types";
@@ -26,6 +27,27 @@ function errorMessage(reason: unknown): string {
 
 function findingBookmarkKey(item: FindingRecord): string {
   return String(item.id || `${item.run || "unknown"}:${item.line || item.ts || item.technique || "finding"}`);
+}
+
+function JEFResult({ evaluation }: { evaluation: JEFEvaluation }) {
+  if (evaluation.status !== "scored") {
+    return <section className="v2-jef-result" role="status"><strong>JEF evaluation unavailable</strong><span>{evaluation.error || "The scorer did not return a result."}</span></section>;
+  }
+  const matches = evaluation.matches || [];
+  const missing = evaluation.missing || [];
+  return <section className={`v2-jef-result ${evaluation.triggered ? "triggered" : ""}`} role="status">
+    <header><strong>JEF evaluation</strong><span>{evaluation.triggered ? "Threshold triggered" : "Below threshold"}</span></header>
+    <dl className="v2-jef-metrics">
+      <div><dt>Score</dt><dd>{Number(evaluation.score || 0).toFixed(2)}</dd></div>
+      <div><dt>Percent</dt><dd>{Number(evaluation.percentage || 0).toFixed(2)}%</dd></div>
+      <div><dt>Threshold</dt><dd>{evaluation.threshold}%</dd></div>
+      {evaluation.total_possible_score !== undefined && <div><dt>Possible</dt><dd>{evaluation.total_possible_score}</dd></div>}
+    </dl>
+    <div className="v2-jef-criteria">
+      <div><strong>Matched criteria · {matches.length}</strong>{matches.length ? <ul>{matches.map((item, index) => <li key={`${index}:${item}`}>{item}</li>)}</ul> : <p>None</p>}</div>
+      <div><strong>Missing criteria · {missing.length}</strong>{missing.length ? <ul>{missing.map((item, index) => <li key={`${index}:${item}`}>{item}</li>)}</ul> : <p>None</p>}</div>
+    </div>
+  </section>;
 }
 
 function useArsenal() {
@@ -130,7 +152,7 @@ export function ComposeView() {
       {!conversation.turns.length && !result && <EmptyState title="No conversation yet" detail="The first delivery opens a persistent target thread. Every later delivery is a contextual follow-up until you start a new turn." />}
       {!!conversation.turns.length && <div className="v2-conversation-thread">{conversation.turns.map((turn) => <article className="v2-conversation-turn" key={turn.index}>
         <div className="v2-turn-user"><header><span>YOU · TURN {turn.index}</span>{turn.transforms?.length ? <small>{turn.transforms.join(" + ")}</small> : null}</header><p>{turn.request}</p>{turn.payload !== turn.request && <details><summary>Transformed payload</summary><JsonBlock value={turn.payload} /></details>}</div>
-        <div className="v2-turn-target"><header><span>TARGET</span>{turn.verdict && <VerdictBadge verdict={turn.verdict} />}</header><p>{turn.response}</p>{turn.jef_evaluation && <div className={`v2-jef-result ${turn.jef_evaluation.triggered ? "triggered" : ""}`} role="status"><strong>JEF {turn.jef_evaluation.behavior}</strong>{turn.jef_evaluation.status === "scored" ? <><span>{Number(turn.jef_evaluation.percentage || 0).toFixed(2)}% / {turn.jef_evaluation.threshold}% · {turn.jef_evaluation.triggered ? "threshold triggered" : "below threshold"}</span><details className="v2-jef-details"><summary>Scorer details</summary><JsonBlock value={{ score: turn.jef_evaluation.score, percentage: turn.jef_evaluation.percentage, threshold: turn.jef_evaluation.threshold, total_possible_score: turn.jef_evaluation.total_possible_score, matches: turn.jef_evaluation.matches || [], missing: turn.jef_evaluation.missing || [] }} /></details></> : <span>Evaluation unavailable</span>}</div>}</div>
+        <div className="v2-turn-target"><header><span>TARGET</span>{turn.verdict && <VerdictBadge verdict={turn.verdict} />}</header><p>{turn.response}</p>{turn.jef_evaluation && <JEFResult evaluation={turn.jef_evaluation} />}</div>
       </article>)}</div>}
       {result && !result.response && <div className="v2-turn-preview"><header><strong>TURN PREVIEW</strong><span>Not delivered</span></header><JsonBlock value={result.payload} /></div>}
     </Panel>
