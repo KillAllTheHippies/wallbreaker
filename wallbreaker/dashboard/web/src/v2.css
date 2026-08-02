@@ -439,7 +439,7 @@
   @media (max-width: 1240px) {
   .v2-root { grid-template-columns: 196px minmax(0, 1fr); }
   .v2-live-grid { grid-template-columns: minmax(560px, 1fr) 320px; }
-  .v2-run-strip { grid-template-columns: minmax(120px, 1fr) minmax(105px, .8fr) minmax(105px, .8fr) minmax(120px, 1fr) 82px 100px auto; }
+  .v2-run-strip { grid-template-columns: minmax(120px, 1fr) minmax(105px, .8fr) minmax(105px, .8fr) minmax(120px, 1fr) 82px max-content; }
   .v2-run-strip .v2-strip-field:nth-of-type(6) { display: none; }
   .v2-strip-actions { padding-inline: 8px; }
     .v2-operator-controls .role-chip { grid-template-columns: auto minmax(55px, 105px); }
@@ -451,7 +451,7 @@
   .v2-root { grid-template-columns: 176px minmax(0, 1fr); }
   .v2-rail nav button { padding-inline: 8px; }
   .v2-live-grid { grid-template-columns: minmax(520px, 1fr) 300px; }
-  .v2-run-strip { grid-template-columns: minmax(115px, 1fr) minmax(100px, .8fr) minmax(115px, .9fr) 78px auto; }
+  .v2-run-strip { grid-template-columns: minmax(115px, 1fr) minmax(115px, .9fr) 78px max-content; }
   .v2-run-strip .v2-strip-field:nth-of-type(2), .v2-run-strip .v2-strip-field:nth-of-type(3) { display: none; }
   .v2-compose-grid, .v2-workflow-grid, .v2-library-grid, .v2-runs-grid { grid-template-columns: minmax(320px, .85fr) minmax(380px, 1.15fr); }
   .v2-check-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
