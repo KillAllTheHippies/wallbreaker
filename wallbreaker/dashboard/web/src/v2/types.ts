@@ -232,6 +232,9 @@ export interface JEFEvaluation {
   score?: number;
   percentage?: number;
   triggered?: boolean;
+  total_possible_score?: number;
+  matches?: string[];
+  missing?: string[];
   status: "scored" | "unavailable";
   error?: string;
 }

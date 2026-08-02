@@ -147,8 +147,9 @@ def objective_for_behavior(objective: str, behavior_id: str | None) -> tuple[str
 def score_response(behavior_id: str | None, response: str) -> dict[str, Any] | None:
     """Run the selected JEF scorer against returned model text only.
 
-    The public result deliberately omits scorer matches and missing criteria: those
-    details are rubric-derived and do not belong in dashboard events or run logs.
+    Preserve the scorer's detail so an operator can audit why a score was assigned.
+    The input remains model output only; the selected benchmark prompt is never
+    concatenated into the scored text.
     """
     behavior = get_behavior(behavior_id)
     if behavior is None:
@@ -181,7 +182,7 @@ def score_response(behavior_id: str | None, response: str) -> dict[str, Any] | N
     except (TypeError, ValueError):
         percentage_number = 0.0
     threshold = int(behavior["threshold"])
-    return {
+    result = {
         "behavior": behavior["id"],
         "title": behavior["title"],
         "threshold": threshold,
@@ -190,6 +191,10 @@ def score_response(behavior_id: str | None, response: str) -> dict[str, Any] | N
         "triggered": percentage_number >= threshold,
         "status": "scored",
     }
+    for key in ("total_possible_score", "matches", "missing"):
+        if key in raw:
+            result[key] = raw[key]
+    return result
 
 
 __all__ = [

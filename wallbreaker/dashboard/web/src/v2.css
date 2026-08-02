@@ -771,6 +771,9 @@
 
 .v2-agent > .v2-steer { min-height: 102px; padding-block: 7px 8px; }
 .v2-agent > .v2-steer .v2-steer-row textarea { min-height: 42px; }
+.v2-jef-details { width: 100%; margin-top: 4px; }
+.v2-jef-details > summary { cursor: pointer; color: var(--v2-muted); font: 8px var(--v2-mono); }
+.v2-jef-details .v2-code { max-height: 220px; margin-top: 6px; }
 
 @media (max-width: 900px) {
   .v2-agent { height: auto; min-height: 100%; overflow: visible; }
