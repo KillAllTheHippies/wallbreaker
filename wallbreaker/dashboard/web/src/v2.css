@@ -777,8 +777,7 @@
 .v2-loop-empty { display: grid; min-height: 100%; }
 .v2-loop-empty > .v2-empty { min-height: 100%; }
 .v2-loop-event { border-bottom: 1px solid var(--v2-line-soft); }
-.v2-loop-event > details > summary { display: grid; min-height: 45px; grid-template-columns: 12px 92px minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 6px 10px; cursor: pointer; }
-.v2-loop-event > details > summary:hover { background: #141416; }
+.v2-loop-event-summary { display: grid; min-height: 38px; grid-template-columns: 12px 92px minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 5px 10px; background: #0e1012; }
 .v2-loop-event-marker { color: var(--v2-dim); font-size: 7px; }
 .v2-loop-event-attacker .v2-loop-event-marker, .v2-loop-event-attacker .v2-loop-event-who strong { color: var(--v2-red); }
 .v2-loop-event-target .v2-loop-event-marker, .v2-loop-event-target .v2-loop-event-who strong { color: var(--v2-teal); }
@@ -790,7 +789,7 @@
 .v2-loop-event-copy > strong { color: var(--v2-muted); font-size: 8px; font-weight: 500; text-transform: uppercase; }
 .v2-loop-event-copy > span { overflow: hidden; color: #d2cbc8; font: 9px var(--v2-mono); text-overflow: ellipsis; white-space: nowrap; }
 .v2-loop-event-detail { display: grid; gap: 7px; padding: 9px 12px 11px 122px; border-top: 1px solid #201d1e; background: #090b0d; }
-.v2-loop-event-detail > p { margin: 0; color: #d2cbc8; font: 9px/1.55 var(--v2-mono); white-space: pre-wrap; overflow-wrap: anywhere; }
+.v2-loop-event-detail > p { max-height: 240px; margin: 0; overflow: auto; color: #d2cbc8; font: 10px/1.6 var(--v2-mono); white-space: pre-wrap; overflow-wrap: anywhere; }
 .v2-loop-event-detail > span, .v2-loop-event-detail > details > summary { color: var(--v2-muted); font: 8px var(--v2-mono); }
 .v2-loop-event-detail .v2-code { max-height: 220px; }
 
@@ -814,7 +813,7 @@
   .v2-agent-advanced > summary { grid-template-columns: 1fr; gap: 2px; padding-block: 6px; }
   .v2-agent-advanced > summary > span:last-child { text-align: left; }
   .v2-agent-advanced-body .v2-form-grid { grid-template-columns: 1fr; }
-  .v2-loop-event > details > summary { grid-template-columns: 12px 70px minmax(0, 1fr); }
-  .v2-loop-event > details > summary > :last-child { display: none; }
+  .v2-loop-event-summary { grid-template-columns: 12px 70px minmax(0, 1fr); }
+  .v2-loop-event-summary > :last-child { display: none; }
   .v2-loop-event-detail { padding-left: 20px; }
 }

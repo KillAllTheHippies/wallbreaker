@@ -589,20 +589,20 @@ function AgentLoop({ execution, events, streamState }: { execution: ExecutionSum
       {loopEvents.map((event) => {
         const actor = actorLabel(event);
         const copy = event.text || eventTitle(event);
+        const compactKind = ["start", "round", "lifecycle", "run_meta"].includes(event.kind.toLowerCase());
+        const transcript = event.text?.trim() || "";
         return <li key={event.id} className={`v2-loop-event v2-loop-event-${actor.toLowerCase()}`}>
-          <details>
-            <summary>
-              <span className="v2-loop-event-marker" aria-hidden="true">●</span>
-              <span className="v2-loop-event-who"><strong>{actor}</strong><small>{event.round ? `Round ${event.round}` : formatTime(event.timestamp)}</small></span>
-              <span className="v2-loop-event-copy"><strong>{event.kind.replace(/_/g, " ")}</strong><span title={copy}>{copy}</span></span>
-              {event.verdict ? <VerdictBadge verdict={event.verdict} /> : <span className="v2-loop-event-time">{formatTime(event.timestamp)}</span>}
-            </summary>
-            <div className="v2-loop-event-detail">
-              <p>{copy}</p>
-              <span>{eventMeta(event) || `Event #${event.sequence}`}</span>
-              {hasValue(event.data) && <details><summary>Structured detail</summary><JsonBlock value={event.data} /></details>}
-            </div>
-          </details>
+          <div className="v2-loop-event-summary">
+            <span className="v2-loop-event-marker" aria-hidden="true">●</span>
+            <span className="v2-loop-event-who"><strong>{actor}</strong><small>{event.round ? `Round ${event.round}` : formatTime(event.timestamp)}</small></span>
+            <span className="v2-loop-event-copy"><strong>{event.kind.replace(/_/g, " ")}</strong>{compactKind && <span title={copy}>{copy}</span>}</span>
+            {event.verdict ? <VerdictBadge verdict={event.verdict} /> : <span className="v2-loop-event-time">{formatTime(event.timestamp)}</span>}
+          </div>
+          {!compactKind && <div className="v2-loop-event-detail">
+            {transcript ? <p>{transcript}</p> : <p>{copy}</p>}
+            <span>{eventMeta(event) || `Event #${event.sequence}`}</span>
+            {hasValue(event.data) && <details><summary>Raw event data</summary><JsonBlock value={event.data} /></details>}
+          </div>}
         </li>;
       })}
     </ol>
