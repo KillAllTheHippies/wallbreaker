@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { v2Api } from "./api";
 import { JEFBehaviorPicker } from "./JEFBehaviorPicker";
+import { JEFResult } from "./JEFResult";
 import {
   actorLabel,
   EmptyState,
@@ -13,7 +14,7 @@ import {
   StatusBadge,
   VerdictBadge,
 } from "./components";
-import type { EventEnvelope, ExecutionSummary } from "./types";
+import type { EventEnvelope, ExecutionSummary, JEFEvaluation } from "./types";
 import { correlateRawEvents, projectActivityEvents } from "./eventProjection";
 
 interface TechniqueChoice { name: string; description?: string; control?: boolean }
@@ -84,7 +85,9 @@ function useExecutionEvents(
     };
     connect();
     return () => { controller.abort(); window.clearTimeout(timer); };
-  }, [execution?.id, execution?.source, execution?.status, enabled]);
+  // A terminal status is an update to the same evidence stream, not a new stream.
+  // Including it here cleared the transcript exactly when a run completed.
+  }, [execution?.id, execution?.source, enabled]);
 
   return { events, streamState };
 }
@@ -556,7 +559,16 @@ function SteeringBar({ execution }: { execution: ExecutionSummary | null }) {
   );
 }
 
-const LOOP_KINDS = new Set(["start", "round", "message", "tool_call", "tool_result", "result", "verdict", "feedback", "operator", "error", "control", "done"]);
+const LOOP_KINDS = new Set(["start", "round", "message", "tool_call", "tool_result", "result", "verdict", "judge_verdict", "jef_evaluation", "feedback", "operator", "error", "control", "done"]);
+
+function jefEvaluation(event: EventEnvelope): JEFEvaluation | null {
+  const candidate = event.data?.evaluation;
+  if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) return null;
+  const evaluation = candidate as Partial<JEFEvaluation>;
+  return typeof evaluation.behavior === "string" && typeof evaluation.status === "string"
+    ? evaluation as JEFEvaluation
+    : null;
+}
 
 function AgentLoop({ execution, events, streamState }: { execution: ExecutionSummary | null; events: EventEnvelope[]; streamState: string }) {
   const activity = useMemo(() => projectActivityEvents(events, execution?.objective || ""), [events, execution?.objective]);
@@ -591,6 +603,7 @@ function AgentLoop({ execution, events, streamState }: { execution: ExecutionSum
         const copy = event.text || eventTitle(event);
         const compactKind = ["start", "round", "lifecycle", "run_meta"].includes(event.kind.toLowerCase());
         const transcript = event.text?.trim() || "";
+        const evaluation = event.kind === "jef_evaluation" ? jefEvaluation(event) : null;
         return <li key={event.id} className={`v2-loop-event v2-loop-event-${actor.toLowerCase()}`}>
           <div className="v2-loop-event-summary">
             <span className="v2-loop-event-marker" aria-hidden="true">●</span>
@@ -599,7 +612,7 @@ function AgentLoop({ execution, events, streamState }: { execution: ExecutionSum
             {event.verdict ? <VerdictBadge verdict={event.verdict} /> : <span className="v2-loop-event-time">{formatTime(event.timestamp)}</span>}
           </div>
           {!compactKind && <div className="v2-loop-event-detail">
-            {transcript ? <p>{transcript}</p> : <p>{copy}</p>}
+            {evaluation ? <JEFResult evaluation={evaluation} /> : transcript ? <p>{transcript}</p> : <p>{copy}</p>}
             <span>{eventMeta(event) || `Event #${event.sequence}`}</span>
             {hasValue(event.data) && <details><summary>Raw event data</summary><JsonBlock value={event.data} /></details>}
           </div>}
