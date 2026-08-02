@@ -471,6 +471,7 @@ function RunLauncher({ execution, onRefresh }: { execution: ExecutionSummary | n
   const [techniquePickerOpen, setTechniquePickerOpen] = useState(false);
   const [working, setWorking] = useState(false);
   const [message, setMessage] = useState("");
+  useEffect(() => { if (execution) setMessage(""); }, [execution?.id]);
   useEffect(() => { v2Api.tools().then((items) => setTechniques(items.filter((item) => !item.control).map((item) => ({ name: String(item.name || ""), description: typeof item.description === "string" ? item.description : undefined, control: Boolean(item.control) })).filter((item) => item.name))).catch(() => setTechniques([])); }, []);
   useEffect(() => { localStorage.setItem("wallbreaker:v2:techniques", JSON.stringify(selected)); }, [selected]);
   const visibleTechniques = useMemo(() => {

@@ -85,13 +85,16 @@
 .v2-run-queue > button small { grid-column: 2; }
 .v2-rail-foot { display: grid; gap: 7px; margin-top: auto; padding: 13px 14px; border-top: 1px solid var(--v2-line-soft); color: var(--v2-muted); }
 .v2-rail-foot small { font-family: var(--v2-mono); font-size: 9px; }
-.v2-rail-collapsed .v2-brand { justify-content: center; padding-inline: 0; }
+.v2-rail-collapsed .v2-brand { min-height: 58px; justify-content: center; padding-inline: 0; }
 .v2-rail-collapsed .v2-brand strong, .v2-rail-collapsed .v2-brand small, .v2-rail-collapsed .v2-rail-section, .v2-rail-collapsed .v2-rail-foot { display: none; }
 .v2-rail-collapsed .v2-brand .v2-rail-toggle { position: absolute; right: -12px; z-index: 3; width: 24px; background: var(--v2-surface); }
-.v2-rail-collapsed .v2-rail nav { padding-inline: 8px; }
-.v2-rail-collapsed .v2-rail nav button { justify-content: center; padding-inline: 0; }
-.v2-rail-collapsed .v2-rail nav button span { color: var(--v2-muted); }
-.v2-rail-collapsed .v2-rail nav button.active span { color: var(--v2-green); }
+.v2-rail-collapsed .v2-rail nav { justify-items: center; gap: 5px; padding: 12px 8px; }
+.v2-rail-collapsed .v2-rail nav button { display: grid; width: 40px; min-height: 40px; place-items: center; padding: 0; border-radius: 7px; }
+.v2-rail-collapsed .v2-rail nav button b { display: none; }
+.v2-rail-collapsed .v2-rail nav button span { width: auto; color: var(--v2-muted); font-size: 15px; line-height: 1; }
+.v2-rail-collapsed .v2-rail nav button:hover { background: #17191b; }
+.v2-rail-collapsed .v2-rail nav button.active { border-color: #3a4240; background: #15201f; box-shadow: inset 2px 0 var(--v2-teal); }
+.v2-rail-collapsed .v2-rail nav button.active span { color: var(--v2-teal); }
 
 .v2-shell { display: flex; min-width: 0; min-height: 0; flex-direction: column; }
 .v2-mobile-header { display: none; }
@@ -739,19 +742,19 @@
 .v2-technique-popover > footer { min-height: 36px; border-top: 1px solid var(--v2-line-soft); border-bottom: 0; }
 
 /* Agent workspace: compact controls around the canonical attack -> target -> judge loop. */
-.v2-agent-launch { margin: 9px 12px; border: 1px solid var(--v2-line); border-radius: 7px; background: #101113; }
-.v2-agent-launch > summary { display: flex; min-height: 43px; align-items: center; justify-content: space-between; gap: 16px; padding: 7px 11px; cursor: pointer; }
+.v2-agent-launch { margin: 6px 12px; border: 1px solid var(--v2-line); border-radius: 7px; background: #101113; }
+.v2-agent-launch > summary { display: flex; min-height: 36px; align-items: center; justify-content: space-between; gap: 12px; padding: 5px 10px; cursor: pointer; }
 .v2-agent-launch > summary > span:first-child { display: grid; min-width: 0; gap: 2px; }
 .v2-agent-launch > summary strong { font-size: 11px; }
 .v2-agent-launch > summary small { overflow: hidden; color: var(--v2-muted); font-size: 9px; font-weight: 400; text-overflow: ellipsis; white-space: nowrap; }
 .v2-agent-launch > summary > span:last-child { flex: 0 0 auto; color: var(--v2-teal); font: 8px var(--v2-mono); letter-spacing: .08em; text-transform: uppercase; }
-.v2-agent-launch-body { display: grid; gap: 7px; padding: 0 10px 10px; }
+.v2-agent-launch-body { display: grid; gap: 5px; padding: 0 9px 7px; }
 .v2-agent-launch-primary { display: grid; grid-template-columns: minmax(260px, 1fr) auto; align-items: end; gap: 8px; }
 .v2-agent-objective { grid-column: 1 / -1; }
-.v2-agent-launch-primary textarea { min-height: 64px; max-height: 110px; resize: vertical; }
-.v2-agent-launch-primary > .v2-button { min-width: 94px; min-height: 34px; }
+.v2-agent-launch-primary textarea { min-height: 50px; max-height: 92px; resize: vertical; }
+.v2-agent-launch-primary > .v2-button { min-width: 94px; min-height: 32px; }
 .v2-agent-advanced { border: 1px solid #383034; border-radius: 5px; background: #0c0e10; }
-.v2-agent-advanced > summary { display: grid; min-height: 38px; grid-template-columns: minmax(180px, .8fr) minmax(0, 1.2fr); align-items: center; gap: 12px; padding: 5px 9px; cursor: pointer; color: var(--v2-muted); font-size: 9px; list-style: none; }
+.v2-agent-advanced > summary { display: grid; min-height: 32px; grid-template-columns: minmax(180px, .8fr) minmax(0, 1.2fr); align-items: center; gap: 12px; padding: 4px 8px; cursor: pointer; color: var(--v2-muted); font-size: 9px; list-style: none; }
 .v2-agent-advanced > summary::-webkit-details-marker { display: none; }
 .v2-agent-advanced > summary:hover { background: #151517; }
 .v2-agent-advanced > summary > span:first-child { display: grid; grid-template-columns: 16px auto; align-items: center; column-gap: 3px; color: var(--v2-text); }

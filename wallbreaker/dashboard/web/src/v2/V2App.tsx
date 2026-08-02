@@ -26,6 +26,18 @@ function isActive(execution: ExecutionSummary) {
   return ["queued", "running", "pausing", "paused"].includes(execution.status);
 }
 
+const ROUTE_ICONS: Record<V2Route, string> = {
+  agent: "◉",
+  live: "◌",
+  compose: "◇",
+  workflows: "↯",
+  findings: "⌕",
+  runs: "▤",
+  reports: "▥",
+  models: "◫",
+  settings: "⚙",
+};
+
 export function V2App() {
   const [route, setRouteState] = useState<V2Route>(routeFromLocation);
   const [railOpen, setRailOpen] = useState(false);
@@ -120,7 +132,7 @@ export function V2App() {
       <a className="v2-skip" href="#v2-main">Skip to main content</a>
       <aside className={`v2-rail ${railOpen ? "open" : ""}`} aria-label="V2 navigation">
         <div className="v2-brand"><span aria-hidden="true">◆</span><strong>WALL<b>BREAKER</b></strong><small>V2</small><button className="v2-rail-toggle" type="button" aria-label={railCollapsed ? "Expand sidebar" : "Collapse sidebar"} aria-expanded={!railCollapsed} onClick={() => setRailCollapsed((collapsed) => !collapsed)}>{railCollapsed ? "›" : "‹"}</button><button className="v2-rail-close" type="button" aria-label="Close navigation" onClick={() => setRailOpen(false)}>Close</button></div>
-        <nav>{ROUTES.map((item) => <button type="button" key={item.id} className={route === item.id ? "active" : ""} aria-current={route === item.id ? "page" : undefined} aria-label={item.label} title={item.label} onClick={() => navigate(item.id)}><span aria-hidden="true">{item.label.slice(0, 1)}</span><b>{item.label}</b></button>)}</nav>
+        <nav>{ROUTES.map((item) => <button type="button" key={item.id} className={route === item.id ? "active" : ""} aria-current={route === item.id ? "page" : undefined} aria-label={item.label} title={item.label} onClick={() => navigate(item.id)}><span aria-hidden="true">{ROUTE_ICONS[item.id]}</span><b>{item.label}</b></button>)}</nav>
         <section className="v2-rail-section" aria-label="Active executions">
           <header><span>Active run</span><span>{activeExecutions.length}</span></header>
           {!activeExecutions.length && <p>No active execution</p>}
