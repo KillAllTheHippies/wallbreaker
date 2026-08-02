@@ -179,7 +179,7 @@ export function FindingsView() {
         return <div className={`v2-bookmark-row ${selected === item ? "active" : ""}`} key={key}><button type="button" className="v2-row-select" onClick={() => setSelected(item)}><div><VerdictBadge verdict={item.label} /><span>{item.technique || "Unclassified"}</span></div><strong>{label}</strong><small>{item.run || "Unknown run"}{item.ts ? ` / ${item.ts}` : ""}</small></button><BookmarkButton active={bookmarks.isBookmarked("finding", key)} busy={bookmarks.busy === bookmarkId(target)} label={label} onClick={() => void bookmarks.toggle(target)} /></div>;
       })}</div>
     </Panel>
-    <Panel title="Finding inspector" meta={selected?.id || selected?.run}>{selected ? <JsonBlock value={selected} /> : <EmptyState title="Select a finding" detail="The complete evidence record, judging, and conversation will appear here." />}</Panel>
+    <Panel className="v2-finding-inspector" title="Finding inspector" meta={selected?.id || selected?.run}>{selected ? <JsonBlock value={selected} /> : <EmptyState title="Select a finding" detail="The complete evidence record, judging, and conversation will appear here." />}</Panel>
   </div>;
 }
 
