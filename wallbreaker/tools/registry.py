@@ -25,10 +25,13 @@ class ToolContext:
     target_thread: list = field(default_factory=list)
     target_system: str | None = None
     target_reasoning: str = ""  # the target's reasoning/CoT from its last reply
-    # Optional JEF behavior selected by a dashboard run. Target tools score the
-    # returned response and forward the complete evaluation to the judge.
+    # Optional JEF behavior selected by a dashboard run. When selected, JEF is
+    # the authoritative loop controller: target tools feed its result back to
+    # the attacker and mark the run successful at the behavior threshold.
     jef_behavior: str = ""
     jef_evaluations: list[dict] = field(default_factory=list)
+    jef_success: bool = False
+    jef_success_evaluation: dict | None = None
     # Every target output produced while JEF is selected receives a stable id here.
     # The completion gate uses this inventory to prove that no multi-turn, retried,
     # interrupted, or cached output escaped both JEF and ordinary judging.

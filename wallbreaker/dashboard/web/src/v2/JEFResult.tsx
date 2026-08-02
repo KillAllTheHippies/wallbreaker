@@ -7,8 +7,9 @@ export function JEFResult({ evaluation }: { evaluation: JEFEvaluation }) {
   }
   const matches = evaluation.matches || [];
   const missing = evaluation.missing || [];
-  return <section className={`v2-jef-result ${evaluation.triggered ? "triggered" : ""}`} role="status">
-    <header><strong>JEF evaluation</strong><span>{evaluation.triggered ? "Threshold triggered" : "Below threshold"}</span></header>
+  const passed = evaluation.passed ?? evaluation.triggered;
+  return <section className={`v2-jef-result ${passed ? "triggered" : ""}`} role="status">
+    <header><strong>JEF test</strong><span>{passed ? "Threshold reached" : "Below threshold — continue"}</span></header>
     <dl className="v2-jef-metrics">
       <div><dt>Score</dt><dd>{Number(evaluation.score || 0).toFixed(2)}</dd></div>
       <div><dt>Percent</dt><dd>{Number(evaluation.percentage || 0).toFixed(2)}%</dd></div>

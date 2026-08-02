@@ -1735,11 +1735,6 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
         def internal_message(role, text, source) -> None:
             runlog.event("history_message", role=role, text=text, source=source)
 
-        def completion_gate(gate: dict) -> None:
-            payload = dict(gate)
-            runlog.event("jef_completion_gate", actor="judge", **payload)
-            push({"type": "jef_completion_gate", "actor": "judge", **payload})
-
         def tool_run_event(event) -> None:
             payload = dict(event) if isinstance(event, dict) else {"text": str(event)}
             event_type = str(payload.pop("event", "tool_run_event"))
@@ -1770,7 +1765,6 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
             on_error=error_event,
             on_feedback=feedback_event,
             on_internal_message=internal_message,
-            on_completion_gate=completion_gate,
             on_usage=lambda i, o: push({"type": "usage", "input": i, "output": o}),
         )
 
@@ -2099,14 +2093,15 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
                     if verdict:
                         ctx.execution.metadata["verdict"] = verdict
                     ctx.execution.metadata["technique"] = event.get("name", "")
-                elif event_type == "jef_completion_gate":
-                    ctx.execution.metadata["jef_completion_gate"] = {
-                        "state": event.get("state", ""),
+                elif event_type == "jef_test":
+                    ctx.execution.metadata["jef_test"] = {
+                        "state": "passed" if event.get("passed") else "below_threshold",
                         "behavior": event.get("behavior", ""),
                         "score": event.get("score"),
+                        "percentage": event.get("percentage"),
                         "threshold": event.get("threshold"),
-                        "normal_judge_passed": bool(event.get("normal_judge_passed")),
-                        "retry_available": bool(event.get("retry_available")),
+                        "passed": bool(event.get("passed")),
+                        "missing": event.get("missing", []),
                     }
                 if event_type == "control":
                     state = str(event.get("state") or "")

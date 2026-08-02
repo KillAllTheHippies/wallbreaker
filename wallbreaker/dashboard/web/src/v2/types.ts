@@ -234,9 +234,14 @@ export interface JEFEvaluation {
   score?: number;
   percentage?: number;
   triggered?: boolean;
+  passed?: boolean;
   total_possible_score?: number;
   matches?: string[];
   missing?: string[];
+  conversation_id?: number;
+  output_id?: number;
+  output_ids?: number[];
+  output_count?: number;
   status: "scored" | "unavailable";
   error?: string;
 }

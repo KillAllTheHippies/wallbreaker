@@ -564,10 +564,10 @@ function SteeringBar({ execution }: { execution: ExecutionSummary | null }) {
   );
 }
 
-const LOOP_KINDS = new Set(["start", "round", "message", "tool_call", "tool_result", "result", "verdict", "judge_verdict", "jef_evaluation", "jef_completion_gate", "feedback", "operator", "error", "control", "done"]);
+const LOOP_KINDS = new Set(["start", "round", "message", "tool_call", "tool_result", "result", "verdict", "judge_verdict", "jef_test", "feedback", "operator", "error", "control", "done"]);
 
 function jefEvaluation(event: EventEnvelope): JEFEvaluation | null {
-  const candidate = event.data?.evaluation;
+  const candidate = event.kind === "jef_test" ? event.data : event.data?.evaluation;
   if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) return null;
   const evaluation = candidate as Partial<JEFEvaluation>;
   return typeof evaluation.behavior === "string" && typeof evaluation.status === "string"
@@ -613,7 +613,7 @@ function AgentLoop({ execution, events, streamState, configuredRoles }: { execut
         const copy = event.text || eventTitle(event);
         const compactKind = ["start", "round", "lifecycle", "run_meta"].includes(event.kind.toLowerCase());
         const transcript = event.text?.trim() || "";
-        const evaluation = event.kind === "jef_evaluation" ? jefEvaluation(event) : null;
+        const evaluation = event.kind === "jef_test" ? jefEvaluation(event) : null;
         return <li key={event.id} className={`v2-loop-event v2-loop-event-${actor.toLowerCase()}`}>
           <div className="v2-loop-event-summary">
             <span className="v2-loop-event-marker" aria-hidden="true">●</span>
@@ -632,39 +632,12 @@ function AgentLoop({ execution, events, streamState, configuredRoles }: { execut
   </section>;
 }
 
-function JefRetryControl({ execution, events }: { execution: ExecutionSummary | null; events: EventEnvelope[] }) {
-  const [sending, setSending] = useState(false);
-  const [status, setStatus] = useState("");
-  const gate = [...events].reverse().find((event) => event.kind === "jef_completion_gate");
-  const data = gate?.data || {};
-  if (!gate || data.allowed !== false || data.retry_available !== true) return null;
-  const score = typeof data.score === "number" ? `${data.score}%` : "not available";
-  const threshold = typeof data.threshold === "number" ? `${data.threshold}%` : "the selected behavior threshold";
-  const active = Boolean(execution && ["queued", "running", "pausing", "paused"].includes(execution.status));
-  const retry = async () => {
-    if (!execution || !active) return;
-    setSending(true); setStatus("");
-    try {
-      await v2Api.steer(execution, "Try another authorized evaluation attempt for the selected JEF behavior, then re-run both JEF and the normal judge before finishing.");
-      setStatus("Retry guidance queued for the next Agent Mode boundary.");
-    } catch (reason) {
-      setStatus(reason instanceof Error ? reason.message : "Unable to queue retry guidance");
-    } finally { setSending(false); }
-  };
-  return <section className="v2-jef-retry" aria-label="JEF completion gate">
-    <div><strong>Completion blocked</strong><span>JEF score {score} · required {threshold}</span><p>{String(data.message || "The selected JEF behavior and normal judge must both pass before completion.")}</p></div>
-    <button type="button" className="v2-button v2-button-primary" disabled={!active || sending} onClick={retry}>{sending ? "Queuing" : "Try again"}</button>
-    {status && <span role="status">{status}</span>}
-  </section>;
-}
-
 export function AgentView({ execution, enabled = true, onRefresh, onStarted, configuredRoles }: { execution: ExecutionSummary | null; enabled?: boolean; onRefresh: () => void; onStarted: (execution: ExecutionSummary) => void; configuredRoles?: RoleAssignments | null }) {
   const { events, streamState } = useExecutionEvents(execution, enabled);
   return <div className="v2-agent">
     <RunStrip execution={execution} onRefresh={onRefresh} />
     <RunLauncher execution={execution} onRefresh={onRefresh} onStarted={onStarted} />
     <AgentLoop execution={execution} events={events} streamState={streamState} configuredRoles={configuredRoles} />
-    <JefRetryControl execution={execution} events={events} />
     <SteeringBar execution={execution} />
   </div>;
 }

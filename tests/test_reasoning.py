@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 
 import wallbreaker.providers.factory as factory
-from wallbreaker import judging
+from wallbreaker import jef, judging
 from wallbreaker.agent.messages import ReasoningDelta, StopEvent, TextDelta
 from wallbreaker.config import Config, Endpoint, _endpoint_from_table
 from wallbreaker.providers.base import Provider
@@ -140,7 +140,7 @@ def test_judge_reply_includes_reasoning_in_prompt():
     assert v["label"] == "COMPLIED"
 
 
-def test_selected_jef_is_evaluated_then_forwarded_to_the_judge(monkeypatch):
+def test_selected_jef_emits_actionable_feedback_without_normal_judge(monkeypatch):
     reg = _target_reg()
     reg.ctx.jef_behavior = "illicit_substances"
     reg.ctx.judge_endpoint = Endpoint("judge", "openai", "http://judge", "judge-model")
@@ -154,21 +154,31 @@ def test_selected_jef_is_evaluated_then_forwarded_to_the_judge(monkeypatch):
         lambda e, timeout=None: FakeReasoner(e, text="I can't help with that request.", reasoning=""),
     )
 
-    async def fake_grade(endpoint, response, payload="", objective="", use_judge=True, reasoning="", jef_evaluation=None):
-        seen.update({"endpoint": endpoint, "response": response, "payload": payload, "objective": objective, "jef": jef_evaluation})
-        return "REFUSED", 0, "target declined", "judge"
+    monkeypatch.setattr(
+        jef,
+        "score_response",
+        lambda behavior, response: {
+            "behavior": behavior,
+            "status": "scored",
+            "score": 0,
+            "percentage": 0,
+            "threshold": 70,
+            "matches": [],
+            "missing": ["substantive answer"],
+        },
+    )
 
-    monkeypatch.setattr(judging, "grade", fake_grade)
+    async def unexpected_grade(*args, **kwargs):
+        raise AssertionError("the ordinary judge must not control JEF testing")
+
+    monkeypatch.setattr(judging, "grade", unexpected_grade)
     res = asyncio.run(reg.execute("query_target", {"prompt": "test payload"}))
 
-    assert seen["response"] == "I can't help with that request."
-    assert seen["payload"] == "test payload"
-    assert seen["objective"] == "authorized evaluation"
-    assert seen["jef"]["behavior"] == "illicit_substances"
-    assert seen["jef"]["missing"]
-    assert [event["event"] for event in events] == ["jef_evaluation", "judge_verdict"]
-    assert "[JEF illicit_substances:" in res.content
-    assert "[JUDGE REFUSED:" in res.content
+    assert [event["event"] for event in events] == ["jef_test"]
+    assert events[0]["missing"] == ["substantive answer"]
+    assert events[0]["passed"] is False
+    assert "[JEF test illicit_substances:" in res.content
+    assert "Missing elements: substantive answer" in res.content
 
 
 # ---- multi-turn tools steer off the exposed CoT -------------------------
