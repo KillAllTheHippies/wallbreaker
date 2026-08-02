@@ -7,7 +7,6 @@ existing authorized agent objective and retained as run metadata.
 
 from __future__ import annotations
 
-from importlib.metadata import version
 from types import MappingProxyType
 from typing import Any
 
@@ -82,20 +81,49 @@ JEF_BEHAVIORS = tuple(MappingProxyType(item) for item in _BEHAVIORS)
 JEF_BEHAVIOR_IDS = frozenset(item["id"] for item in JEF_BEHAVIORS)
 
 
-def behaviors() -> list[dict[str, Any]]:
-    """Return JSON-ready behavior metadata without benchmark payload content."""
-    from jef.registry import list_all
+class JEFUnavailable(RuntimeError):
+    """Raised when the required JEF runtime is not installed or is incompatible."""
 
-    installed_ids = {str(item["name"]) for item in list_all()}
-    if installed_ids != JEF_BEHAVIOR_IDS:
-        raise RuntimeError(
-            "installed JEF behavior registry does not match WallBreaker's safe catalog"
+
+def _registry_by_id() -> dict[str, dict[str, Any]]:
+    try:
+        from jef.registry import list_all
+    except ModuleNotFoundError as exc:
+        raise JEFUnavailable(
+            "0din-jef is required for JEF behavior selection; install Wallbreaker "
+            "with its dependencies or install the local library/0din-JEF checkout."
+        ) from exc
+    registered = {str(item.get("name") or ""): dict(item) for item in list_all()}
+    if set(registered) != JEF_BEHAVIOR_IDS:
+        raise JEFUnavailable(
+            "the installed 0din-jef behavior registry does not match Wallbreaker's "
+            "supported JEF 0.8.0 catalog"
         )
-    return [dict(item) for item in JEF_BEHAVIORS]
+    return registered
+
+
+def behaviors() -> list[dict[str, Any]]:
+    """Return safe display metadata verified against the installed JEF registry."""
+    registered = _registry_by_id()
+    result = []
+    for item in JEF_BEHAVIORS:
+        registry_item = registered[item["id"]]
+        result.append({
+            **dict(item),
+            "title": str(registry_item.get("display_name") or item["title"]),
+            "category": str(registry_item.get("category") or item["category"]),
+            "threshold": int(registry_item.get("pass_threshold") or item["threshold"]),
+            "deprecated": bool(registry_item.get("deprecated", item["deprecated"])),
+        })
+    return result
 
 
 def jef_version() -> str:
-    return version("0din-jef")
+    try:
+        from jef import __version__
+    except ModuleNotFoundError as exc:
+        raise JEFUnavailable("0din-jef is not installed") from exc
+    return str(__version__)
 
 
 def get_behavior(behavior_id: str | None) -> dict[str, Any] | None:
@@ -120,6 +148,7 @@ def objective_for_behavior(objective: str, behavior_id: str | None) -> tuple[str
 __all__ = [
     "JEF_BEHAVIORS",
     "JEF_BEHAVIOR_IDS",
+    "JEFUnavailable",
     "behaviors",
     "get_behavior",
     "jef_version",

@@ -1292,9 +1292,12 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
     @app.get("/api/v2/jef/behaviors")
     def jef_behaviors():
         """Expose JEF behavior labels only; benchmark prompts stay out of the UI."""
-        from ..jef import behaviors, jef_version
+        from ..jef import JEFUnavailable, behaviors, jef_version
 
-        return {"catalog_version": 1, "jef_version": jef_version(), "behaviors": behaviors()}
+        try:
+            return {"catalog_version": 1, "jef_version": jef_version(), "behaviors": behaviors()}
+        except JEFUnavailable as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
 
     dashboard_inference_lock = asyncio.Lock()
     agent_active = False

@@ -1,8 +1,8 @@
 import pytest
 
 pytest.importorskip("fastapi")
+pytest.importorskip("jef")
 from fastapi.testclient import TestClient  # noqa: E402
-from jef.registry import list_all  # noqa: E402
 
 from wallbreaker.dashboard.server import _compose_attack_payload, create_app  # noqa: E402
 from wallbreaker.jef import JEF_BEHAVIOR_IDS, behaviors, objective_for_behavior  # noqa: E402
@@ -11,7 +11,6 @@ from wallbreaker.jef import JEF_BEHAVIOR_IDS, behaviors, objective_for_behavior 
 def test_jef_catalog_contains_all_safe_behavior_metadata():
     rows = behaviors()
     assert {row["id"] for row in rows} == set(JEF_BEHAVIOR_IDS)
-    assert {row["id"] for row in rows} == {row["name"] for row in list_all()}
     assert len(rows) == 7
     assert all("prompt" not in row and "payload" not in row for row in rows)
     assert {row["threshold"] for row in rows} == {70, 80}

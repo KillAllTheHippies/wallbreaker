@@ -286,6 +286,7 @@
 .v2-field { display: grid; min-width: 0; gap: 5px; color: var(--v2-muted); font-size: 10px; }
 .v2-field > span { color: var(--v2-text); font-size: 10px; }
 .v2-field small { color: var(--v2-dim); }
+.v2-field small.v2-field-error { color: var(--v2-red); }
 .v2-field-wide { grid-column: 1 / -1; }
 .v2-field input, .v2-field select, .v2-field textarea { width: 100%; min-height: 34px; padding: 7px 9px; border: 1px solid var(--v2-line); border-radius: 4px; background: #090b0d; color: var(--v2-text); }
 .v2-field textarea { min-height: 106px; resize: vertical; font-family: var(--v2-mono); font-size: 10px; }

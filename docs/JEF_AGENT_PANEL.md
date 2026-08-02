@@ -20,6 +20,17 @@ labels, categories, descriptions, and thresholds only; benchmark prompts and
 raw harmful test content are not loaded into the UI.
 
 Use the selector only for systems and model outputs you are authorized to test.
-The JEF dependency is installed with Wallbreaker (`0din-jef==0.8.0`). JEF
-behavior selection is a scope label and audit aid; it does not by itself prove a
-finding or replace human review of evidence.
+The JEF dependency is installed with Wallbreaker (`0din-jef==0.8.0`) and the
+dashboard verifies its registry before exposing behavior choices. A production
+installation should use the pinned package dependency. For development against
+a local checkout, install the clone into the same environment before launching
+the dashboard:
+
+```bash
+python -m pip install -e library/0din-JEF
+```
+
+If JEF is unavailable or incompatible, the selector shows a clear configuration
+error rather than an empty catalog. JEF behavior selection is a scope label and
+audit aid; it does not by itself prove a finding or replace human review of
+evidence.
