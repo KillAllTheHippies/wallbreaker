@@ -205,3 +205,127 @@ The absence of a JEF event after a valid target response indicates a JEF
 availability, behavior-binding, or orchestration problem—not a judge verdict.
 The presence of a JEF event followed by “completion blocked” means the gate
 has correctly retained the run for further evidence or operator action.
+
+## Current implementation state
+
+The current V2 implementation has moved JEF beyond a display-only selector:
+
+- JEF behavior selection is validated against the installed registry before a
+  run is created.
+- The selected behavior identifier and authoritative threshold are stored in
+  execution metadata and run history.
+- Target outputs are captured with stable output and conversation identities.
+- The server evaluates the target response after delivery and emits a
+  `jef_test` event containing the score, percentage, threshold, status, matched
+  elements, and missing elements returned by JEF.
+- The compact JEF result is returned to the attacker as part of the harness
+  tool result, so the next attack can respond to concrete missing evidence.
+- JEF evidence is retained in the event stream, findings, reports, and raw
+  historical records rather than being cleared when the loop ends.
+- The completion path is fail-closed for selected JEF runs: a premature
+  `finish` cannot bypass a missing, failed, or below-threshold JEF evaluation.
+- The ordinary judge remains available for diagnostic and non-JEF paths, but
+  it is not allowed to substitute for a required JEF result.
+
+This means the implemented control loop is now:
+
+```text
+attacker plan
+  → harness target call
+  → complete target output
+  → server-side JEF test
+  → jef_test feedback to attacker
+  → next attack or threshold-qualified completion
+```
+
+## Configuration precedence in the current V2 surface
+
+JEF behavior selection and model selection are separate concerns:
+
+- The Models page defines available providers, credentials, endpoints, model
+  catalogs, and reusable role profiles.
+- The top-bar attacker, target, and judge selectors choose the active role
+  assignments used by the next run.
+- Settings supplies persistent Agent defaults for rounds, tokens, concurrency,
+  and request delay.
+- Agent-panel run settings override those defaults for the execution being
+  started.
+- The selected JEF behavior is bound to that execution and is not replaced by
+  later provider or profile edits.
+
+At run creation, Wallbreaker resolves the role configuration and operational
+limits into an execution snapshot. Provider changes therefore affect future
+runs, while an active run keeps the target, attacker, judge, JEF behavior,
+threshold, and limits with which it was started.
+
+## Strategy for making JEF a first-class harness capability
+
+The safest integration strategy is to keep JEF authoritative and deterministic
+while exposing its lifecycle through the same capability and event contracts
+as every other harness operation.
+
+### 1. Keep the server as the evaluation owner
+
+JEF should remain a server-side evaluator, not an attacker-controlled tool.
+The harness should invoke it immediately after every usable target output,
+with the complete ordered conversation available to the evaluator. This
+prevents the attacker from selectively omitting, rewriting, or re-scoring a
+response.
+
+### 2. Expose one stable evaluation contract
+
+Represent each evaluation with an explicit envelope containing:
+
+- execution, run, round, conversation, and output identifiers;
+- behavior identifier and registry version;
+- score, percentage, threshold, and pass status;
+- matched and missing criteria;
+- scorer diagnostics and error state;
+- timestamps and provider/model attribution.
+
+The same envelope should feed the Agent stream, Live inspector, JSONL history,
+SQLite index, Findings, Reports, exports, and future API consumers. A UI should
+never infer JEF state from a colored badge or from a judge verdict alone.
+
+### 3. Make capability registration declarative
+
+Register JEF as a capability with an argument schema, progress semantics,
+artifacts, and cancellation behavior. The initial public operation can remain
+server-owned, for example `jef.evaluate_target_output`, while the attacker
+continues to receive only the safe, compact feedback intended for planning.
+The full scorer record belongs to operator evidence and the judge context.
+
+This lets the TUI and WebUI expose the same operation without making either
+surface call a UI handler or duplicate JEF rules.
+
+### 4. Separate planning feedback from authoritative evidence
+
+Return missing-element feedback to the attacker so it can decide whether to
+continue. Preserve the full scorer output separately for operators and judges.
+The planning result may be compact; the stored evidence must remain complete,
+versioned, and reproducible.
+
+### 5. Define explicit lifecycle states
+
+JEF evaluation should report at least `queued`, `running`, `scored`,
+`below_threshold`, `passed`, `failed`, `unavailable`, and `cancelled`. The
+execution manager should correlate these states to the target output and make
+them resumable after browser disconnects.
+
+### 6. Test the integration as a contract
+
+The acceptance suite should verify:
+
+- JEF runs after every usable target output, including follow-up turns.
+- Complete ordered conversations are scored without cross-conversation mixing.
+- The scorer result reaches the attacker feedback channel and judge context.
+- Full JEF details survive JSONL persistence, indexing, reload, and export.
+- Missing, malformed, unavailable, and cancelled evaluations fail safely.
+- A below-threshold result keeps the loop open and a qualifying result can
+  complete it according to the selected run policy.
+- Provider/profile changes do not mutate an already-created execution.
+- Reconnection resumes the same event sequence without duplicate evaluation.
+
+The governing design principle is: **JEF is an authoritative harness
+evaluation with operator-visible evidence and attacker-visible guidance—not a
+second, competing judge and not a UI-only annotation.**
