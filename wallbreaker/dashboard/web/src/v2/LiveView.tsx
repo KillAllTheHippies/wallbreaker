@@ -472,7 +472,9 @@ function RunLauncher({ execution, onRefresh, onStarted }: { execution: Execution
   const [techniquePickerOpen, setTechniquePickerOpen] = useState(false);
   const [working, setWorking] = useState(false);
   const [message, setMessage] = useState("");
+  const [launcherOpen, setLauncherOpen] = useState(!execution);
   useEffect(() => { if (execution) setMessage(""); }, [execution?.id]);
+  useEffect(() => { setLauncherOpen(!execution); }, [execution?.id]);
   useEffect(() => { v2Api.tools().then((items) => setTechniques(items.filter((item) => !item.control).map((item) => ({ name: String(item.name || ""), description: typeof item.description === "string" ? item.description : undefined, control: Boolean(item.control) })).filter((item) => item.name))).catch(() => setTechniques([])); }, []);
   useEffect(() => { localStorage.setItem("wallbreaker:v2:techniques", JSON.stringify(selected)); }, [selected]);
   const visibleTechniques = useMemo(() => {
@@ -497,7 +499,7 @@ function RunLauncher({ execution, onRefresh, onStarted }: { execution: Execution
     finally { setWorking(false); }
   };
   const techniqueSummary = selected == null ? `All ${techniques.length || ""} techniques`.trim() : `${selected.length} techniques`;
-  return <details className="v2-agent-launch" open={!active}>
+  return <details className="v2-agent-launch" open={launcherOpen} onToggle={(event) => setLauncherOpen(event.currentTarget.open)}>
     <summary><span><strong>{active ? "Current engagement" : "New engagement"}</strong><small>{active ? "Launch controls are available when this run ends" : "Set the objective, then start the agent loop"}</small></span><span>{active ? "In progress" : "Ready"}</span></summary>
     <div className="v2-agent-launch-body">
       <div className="v2-agent-launch-primary">
