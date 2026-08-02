@@ -261,6 +261,11 @@
 .v2-code { max-height: 420px; margin: 0; overflow: auto; padding: 11px; background: #090b0d; color: #c9c2bf; font-family: var(--v2-mono); font-size: 10px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
 
 .v2-compose-grid, .v2-workflow-grid, .v2-library-grid, .v2-runs-grid { grid-template-columns: minmax(360px, .9fr) minmax(440px, 1.1fr); }
+.v2-compose-grid { height: 100%; min-height: 0; grid-template-rows: minmax(0, 1fr); align-content: stretch; overflow: hidden; }
+.v2-compose-grid > .v2-panel { min-height: 0; }
+.v2-compose-grid > .v2-panel:first-child { overflow: auto; }
+.v2-compose-grid > .v2-panel:nth-child(2) { display: flex; flex-direction: column; }
+.v2-compose-grid > .v2-panel:nth-child(2) > .v2-conversation-thread { min-height: 0; max-height: none; flex: 1; }
 .v2-compose-session { display: flex; min-height: 62px; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 14px; border-bottom: 1px solid var(--v2-line-soft); background: #0c0e10; }
 .v2-compose-session > div { display: grid; min-width: 0; gap: 2px; }
 .v2-compose-session span { color: var(--v2-teal); font: 8px var(--v2-mono); letter-spacing: .1em; }
@@ -455,6 +460,9 @@
   .v2-inspector { min-height: 480px; border-top: 1px solid var(--v2-line); }
   .v2-steer { position: sticky; z-index: 9; bottom: 0; min-height: 125px; }
   .v2-compose-grid, .v2-workflow-grid, .v2-library-grid, .v2-runs-grid { grid-template-columns: 1fr; }
+  .v2-compose-grid { height: auto; min-height: 100%; grid-template-rows: auto; overflow: visible; }
+  .v2-compose-grid > .v2-panel:first-child { overflow: hidden; }
+  .v2-compose-grid > .v2-panel:nth-child(2) > .v2-conversation-thread { min-height: auto; max-height: calc(100vh - 210px); flex: initial; }
   .v2-capability-list, .v2-library-list, .v2-finding-list, .v2-run-list { max-height: 330px; }
   .v2-provider-grid { grid-template-columns: 1fr; }
   .v2-report-grid { grid-template-columns: 1fr; }
