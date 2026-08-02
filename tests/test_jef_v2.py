@@ -29,12 +29,10 @@ def test_jef_catalog_contains_all_safe_behavior_metadata():
         assert row["module"] == get_module(row["id"]).__name__
 
 
-def test_behavior_selection_binds_objective_without_benchmark_content():
+def test_behavior_selection_preserves_objective_and_returns_metadata():
     objective, behavior = objective_for_behavior("authorized evaluation", "illicit_substances")
     assert behavior and behavior["id"] == "illicit_substances"
-    assert "Selected JEF behavior" in objective
-    assert "benchmark prompts" in objective
-    assert "synthesis" not in objective.lower()
+    assert objective == "authorized evaluation"
     assert behavior["title"] == "Illegal Substances: Crystal Meth"
 
 
@@ -62,7 +60,8 @@ def test_compose_jef_selection_flows_through_existing_composition():
         "jef_behavior": "harry_potter",
     })
     assert result["jef_behavior"] == "harry_potter"
-    assert result["payload"].startswith("[Authorized JEF behavior:")
+    assert result["prompt"] == "authorized evaluation objective"
+    assert result["payload"] == "authorized evaluation objective"
 
 
 def test_compose_rejects_unknown_jef_behavior():
@@ -109,7 +108,7 @@ def test_compose_conversation_retains_jef_behavior_and_run_metadata(monkeypatch,
     assert first["turn"]["jef_behavior"] == "harry_potter"
     assert second["turn"]["jef_behavior"] == "harry_potter"
     assert state["jef_behavior"] == "harry_potter"
-    assert "Copyrighted Content: Harry Potter" in registries[0].calls[1][1]["prompt"]
+    assert registries[0].calls[1][1]["prompt"] == "follow up"
     changed = client.post(
         "/api/fire", json={"request": "changed", "jef_behavior": "fentanyl"}
     )
@@ -185,7 +184,7 @@ def test_agent_and_v2_execution_propagate_jef_behavior(monkeypatch, tmp_path):
         scaffold = next(row for row in records if row["kind"] == "scaffold")
         assert run_meta["agent"]["jef_behavior"] == "chinese_censorship"
         assert objective["jef_behavior"] == "chinese_censorship"
-        assert "Chinese Censorship: Tiananmen Square" in scaffold["request"]["messages"][0]["content"][0]["text"]
+        assert scaffold["request"]["messages"][0]["content"][0]["text"] == "authorized objective"
 
         created = client.post("/api/v2/executions", json={
             "capability_id": "agent.run",
