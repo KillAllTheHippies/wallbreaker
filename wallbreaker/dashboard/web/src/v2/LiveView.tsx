@@ -571,10 +571,6 @@ function AgentLoop({ execution, events, streamState }: { execution: ExecutionSum
   const latestFor = (role: string) => [...loopEvents].reverse().find((event) => actorLabel(event).toLowerCase() === role);
 
   return <section className="v2-agent-loop" aria-label="Attack target judge loop">
-    <header className="v2-agent-loop-head">
-      <div><span>Agent loop</span><h2>Attack <i>→</i> Target <i>→</i> Judge</h2></div>
-      <div>{execution ? <StatusBadge status={execution.status} /> : <span className="v2-status">● Idle</span>}<span className="v2-mono">{execution ? `stream ${streamState}` : "awaiting objective"}</span></div>
-    </header>
     <div className="v2-loop-roles">
       {roles.map((role, index) => {
         const roleEvent = latestFor(role.id);
@@ -586,7 +582,7 @@ function AgentLoop({ execution, events, streamState }: { execution: ExecutionSum
         </article>;
       })}
     </div>
-    <div className="v2-loop-exchange-head"><strong>Conversation stream</strong><span>{loopEvents.length} exchanges{execution?.current_round ? ` · round ${execution.current_round}` : ""}</span></div>
+    <div className="v2-loop-exchange-head"><strong>Conversation stream</strong><span>{loopEvents.length} exchanges{execution?.current_round ? ` · round ${execution.current_round}` : ""}</span><i>{execution ? <StatusBadge status={execution.status} /> : <span className="v2-status">● Idle</span>}<small>{execution ? `stream ${streamState}` : "awaiting objective"}</small></i></div>
     <ol className="v2-loop-feed" aria-label="Agent conversation stream">
       {!execution && <li className="v2-loop-empty"><EmptyState title="No active agent loop" detail="Enter an objective above to begin an attack → target → judge engagement." /></li>}
       {execution && !loopEvents.length && <li className="v2-loop-empty"><EmptyState title="Waiting for the first exchange" detail="Messages, target responses, tool actions, and judge verdicts will appear here in order." /></li>}
