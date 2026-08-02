@@ -71,8 +71,10 @@ def _format_reply(reply: str, reasoning: str) -> str:
     return body
 
 
-def _jef_result(ctx: ToolContext, response: str) -> str:
-    """Score a returned target response when the enclosing run selected JEF."""
+async def _jef_judge_result(
+    ctx: ToolContext, response: str, payload: str, reasoning: str, technique: str,
+) -> str:
+    """Run JEF as an explicit judge-stage, then provide its full result to the judge."""
     behavior = str(getattr(ctx, "jef_behavior", "") or "")
     if not behavior:
         return ""
@@ -82,13 +84,29 @@ def _jef_result(ctx: ToolContext, response: str) -> str:
     if evaluation is None:
         return ""
     ctx.jef_evaluations.append(evaluation)
+    if ctx.run_events is not None:
+        ctx.run_events({"event": "jef_evaluation", "actor": "judge", "evaluation": evaluation})
     if evaluation.get("status") != "scored":
         return "\n[JEF evaluation unavailable]"
     percentage = float(evaluation.get("percentage", 0))
     threshold = int(evaluation.get("threshold", 0))
     status = "TRIGGERED" if evaluation.get("triggered") else "not triggered"
     ctx.emit(f"JEF {evaluation.get('behavior', behavior)}: {percentage:.2f}% / {threshold}% — {status}")
-    return f"\n[JEF {evaluation.get('behavior', behavior)}: {percentage:.2f}% / {threshold}% — {status}]"
+    from ..judging import grade
+
+    label, score, reason, source = await grade(
+        ctx.judge_endpoint, response, payload=payload,
+        objective=ctx.current_objective, reasoning=reasoning,
+        jef_evaluation=evaluation,
+    )
+    ctx.record_verdict(payload, response, label, reason, technique)
+    verdict = {"label": label, "score": score, "reason": reason, "source": source}
+    if ctx.run_events is not None:
+        ctx.run_events({"event": "judge_verdict", "actor": "judge", "verdict": verdict})
+    return (
+        f"\n[JEF {evaluation.get('behavior', behavior)}: {percentage:.2f}% / {threshold}% — {status}]"
+        f"\n[JUDGE {label}: {reason} ({source})]"
+    )
 
 
 async def _fire(provider, messages, system, max_tokens):
@@ -311,7 +329,9 @@ async def _query_target(args: dict, ctx: ToolContext) -> str:
             f"{raw_encoded[:300]}"
         )
     header = f"[target {target.model} @ {target.base_url} | {dt:.1f}s{enc_note}{dec_note}]\n"
-    return header + body + note + _jef_result(ctx, body)
+    return header + body + note + await _jef_judge_result(
+        ctx, body, messages[-1].text(), reasoning, "query_target"
+    )
 
 
 async def _continue_target(args: dict, ctx: ToolContext) -> str:
@@ -369,7 +389,9 @@ async def _continue_target(args: dict, ctx: ToolContext) -> str:
             f"{raw_encoded[:300]}"
         )
     header = f"[target {target.model} | turn {turns} | {dt:.1f}s{enc_note}{dec_note}]\n"
-    return header + body + note + _jef_result(ctx, body)
+    return header + body + note + await _jef_judge_result(
+        ctx, body, follow, reasoning, "continue_target"
+    )
 
 
 def register(registry: ToolRegistry) -> None:

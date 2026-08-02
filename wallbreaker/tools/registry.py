@@ -26,7 +26,7 @@ class ToolContext:
     target_system: str | None = None
     target_reasoning: str = ""  # the target's reasoning/CoT from its last reply
     # Optional JEF behavior selected by a dashboard run. Target tools score the
-    # returned response and keep only a safe, rubric-free result summary.
+    # returned response and forward the complete evaluation to the judge.
     jef_behavior: str = ""
     jef_evaluations: list[dict] = field(default_factory=list)
     # objective of the active engagement, so auto-saved breaks fold under the right folder

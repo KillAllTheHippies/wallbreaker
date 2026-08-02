@@ -102,7 +102,11 @@ export function V2App() {
 
   const selectedExecution = executions.find((item) => item.id === selectedExecutionId) || null;
   const activeExecutions = executions.filter(isActive);
-  const agentExecution = activeExecutions.find((item) => item.capability_id === "agent.run") || activeExecutions[0] || null;
+  const agentExecution = (selectedExecution?.capability_id === "agent.run" ? selectedExecution : null)
+    || activeExecutions.find((item) => item.capability_id === "agent.run")
+    || activeExecutions[0]
+    || executions.find((item) => item.capability_id === "agent.run")
+    || null;
   const recentExecutions = executions.filter((item) => !isActive(item)).slice(0, 5);
   const routeInfo = ROUTES.find((item) => item.id === route) || ROUTES[0];
 

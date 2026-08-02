@@ -1732,12 +1732,15 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
             runlog.event("history_message", role=role, text=text, source=source)
 
         def tool_run_event(event) -> None:
-            runlog.event("tool_run_event", event=event)
-            push({"type": "progress", "text": json.dumps(event, ensure_ascii=False)})
+            payload = dict(event) if isinstance(event, dict) else {"text": str(event)}
+            event_type = str(payload.pop("event", "tool_run_event"))
+            runlog.event(event_type, **payload)
+            push({"type": event_type, **payload})
 
         registry.ctx.progress = progress
         registry.ctx.run_events = tool_run_event
         registry.ctx.jef_behavior = jef_behavior["id"] if jef_behavior else ""
+        registry.ctx.current_objective = objective
         registry.ctx.record = lambda p, r, lbl, rs, t: runlog.verdict(
             p, r, lbl, rs, t,
             target_model=getattr(run_config.target, "model", "") if run_config.target else "",
