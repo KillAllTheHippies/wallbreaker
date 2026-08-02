@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { RoleAssignments } from "../api";
 import { v2Api } from "./api";
 import { JEFBehaviorPicker } from "./JEFBehaviorPicker";
 import { JEFResult } from "./JEFResult";
@@ -571,15 +572,20 @@ function jefEvaluation(event: EventEnvelope): JEFEvaluation | null {
     : null;
 }
 
-function AgentLoop({ execution, events, streamState }: { execution: ExecutionSummary | null; events: EventEnvelope[]; streamState: string }) {
+function AgentLoop({ execution, events, streamState, configuredRoles }: { execution: ExecutionSummary | null; events: EventEnvelope[]; streamState: string; configuredRoles?: RoleAssignments | null }) {
   const activity = useMemo(() => projectActivityEvents(events, execution?.objective || ""), [events, execution?.objective]);
   const loopEvents = useMemo(() => activity.filter((event) => LOOP_KINDS.has(event.kind)), [activity]);
   const active = Boolean(execution && ["queued", "running", "pausing", "paused"].includes(execution.status));
   const latest = loopEvents[loopEvents.length - 1];
+  const roleModel = (role: "attacker" | "target" | "judge") => {
+    const snapshot = execution?.[role];
+    if (typeof snapshot === "string" && snapshot.trim()) return snapshot;
+    return configuredRoles?.[role]?.model || "Not configured";
+  };
   const roles = [
-    { id: "attacker", label: "Attack", model: execution?.attacker || "Not selected", detail: "Plans and adapts the next attempt" },
-    { id: "target", label: "Target", model: execution?.target || "Not selected", detail: "Receives the attack and responds" },
-    { id: "judge", label: "Judge", model: execution?.judge || "Not selected", detail: "Evaluates evidence and guides the loop" },
+    { id: "attacker" as const, label: "Attack", model: roleModel("attacker"), detail: "Plans and adapts the next attempt" },
+    { id: "target" as const, label: "Target", model: roleModel("target"), detail: "Receives the attack and responds" },
+    { id: "judge" as const, label: "Judge", model: roleModel("judge"), detail: "Evaluates evidence and guides the loop" },
   ];
   const latestFor = (role: string) => [...loopEvents].reverse().find((event) => actorLabel(event).toLowerCase() === role);
 
@@ -649,12 +655,12 @@ function JefRetryControl({ execution, events }: { execution: ExecutionSummary | 
   </section>;
 }
 
-export function AgentView({ execution, enabled = true, onRefresh }: { execution: ExecutionSummary | null; enabled?: boolean; onRefresh: () => void }) {
+export function AgentView({ execution, enabled = true, onRefresh, configuredRoles }: { execution: ExecutionSummary | null; enabled?: boolean; onRefresh: () => void; configuredRoles?: RoleAssignments | null }) {
   const { events, streamState } = useExecutionEvents(execution, enabled);
   return <div className="v2-agent">
     <RunStrip execution={execution} onRefresh={onRefresh} />
     <RunLauncher execution={execution} onRefresh={onRefresh} />
-    <AgentLoop execution={execution} events={events} streamState={streamState} />
+    <AgentLoop execution={execution} events={events} streamState={streamState} configuredRoles={configuredRoles} />
     <JefRetryControl execution={execution} events={events} />
     <SteeringBar execution={execution} />
   </div>;
