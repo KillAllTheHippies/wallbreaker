@@ -1839,6 +1839,9 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
                   "brain": getattr(brain, "model", ""),
                   "provider": role_meta.get("attacker", {}).get("provider", ""),
                   "target": getattr(run_config.target, "model", ""),
+                  # This is the resolved endpoint actually used by grade(), which can
+                  # differ from the raw config when a role profile is active.
+                  "judge": getattr(registry.ctx.judge_endpoint, "model", ""),
                   "max_rounds": max_rounds, "max_tokens": max_tokens,
                   "run_log": runlog.path.name})
             try:
@@ -2063,6 +2066,7 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
                         "attacker": event.get("brain", ""),
                         "provider": event.get("provider", ""),
                         "target": event.get("target", ""),
+                        "judge": event.get("judge", ""),
                         "max_rounds": event.get("max_rounds", 0),
                         "max_tokens": event.get("max_tokens", 0),
                         "jef_behavior": event.get("jef_behavior", ""),
