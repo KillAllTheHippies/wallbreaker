@@ -456,7 +456,7 @@ function RunStrip({ execution, onRefresh }: { execution: ExecutionSummary | null
   </>;
 }
 
-function RunLauncher({ execution, onRefresh }: { execution: ExecutionSummary | null; onRefresh: () => void }) {
+function RunLauncher({ execution, onRefresh, onStarted }: { execution: ExecutionSummary | null; onRefresh: () => void; onStarted: (execution: ExecutionSummary) => void }) {
   const [objective, setObjective] = useState("");
   const [maxRounds, setMaxRounds] = useState(4);
   const [maxTokens, setMaxTokens] = useState(8192);
@@ -484,12 +484,13 @@ function RunLauncher({ execution, onRefresh }: { execution: ExecutionSummary | n
     if (!objective.trim() || active) return;
     setWorking(true); setMessage("");
     try {
-      await v2Api.createExecution("agent.run", {
+      const created = await v2Api.createExecution("agent.run", {
         objective: objective.trim(), max_rounds: maxRounds, max_tokens: maxTokens,
         concurrency, request_delay_ms: requestDelay,
         ...(jefBehavior ? { jef_behavior: jefBehavior } : {}),
         ...(selected == null ? {} : { enabled_techniques: selected }),
       }, "interactive");
+      onStarted(created);
       setMessage("Execution queued. Live events will attach automatically.");
       onRefresh();
     } catch (reason) { setMessage(reason instanceof Error ? reason.message : "Unable to start execution"); }
@@ -655,11 +656,11 @@ function JefRetryControl({ execution, events }: { execution: ExecutionSummary | 
   </section>;
 }
 
-export function AgentView({ execution, enabled = true, onRefresh, configuredRoles }: { execution: ExecutionSummary | null; enabled?: boolean; onRefresh: () => void; configuredRoles?: RoleAssignments | null }) {
+export function AgentView({ execution, enabled = true, onRefresh, onStarted, configuredRoles }: { execution: ExecutionSummary | null; enabled?: boolean; onRefresh: () => void; onStarted: (execution: ExecutionSummary) => void; configuredRoles?: RoleAssignments | null }) {
   const { events, streamState } = useExecutionEvents(execution, enabled);
   return <div className="v2-agent">
     <RunStrip execution={execution} onRefresh={onRefresh} />
-    <RunLauncher execution={execution} onRefresh={onRefresh} />
+    <RunLauncher execution={execution} onRefresh={onRefresh} onStarted={onStarted} />
     <AgentLoop execution={execution} events={events} streamState={streamState} configuredRoles={configuredRoles} />
     <JefRetryControl execution={execution} events={events} />
     <SteeringBar execution={execution} />

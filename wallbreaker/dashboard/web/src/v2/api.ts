@@ -260,7 +260,7 @@ export const v2Api = {
   },
 
   createExecution: (capabilityId: string, args: Record<string, unknown>, mode: ExecutionMode) =>
-    request<ExecutionSummary>("/api/v2/executions", json({ capability_id: capabilityId, args, mode })),
+    request<ExecutionSummary>("/api/v2/executions", json({ capability_id: capabilityId, args, mode })).then((value) => normalizeExecution(value)),
 
   pause: async (execution: ExecutionSummary) => execution.source === "legacy"
     ? request<ExecutionSummary>("/api/agent/pause", { method: "POST" }).then((value) => normalizeExecution(value, "legacy"))

@@ -66,6 +66,12 @@ export function V2App() {
     legacyApi.roles().then(setRoles).catch(() => setRoles(null));
   }, []);
 
+  const focusExecution = useCallback((execution: ExecutionSummary) => {
+    setExecutions((current) => [execution, ...current.filter((item) => item.id !== execution.id)]);
+    setSelectedExecutionId(execution.id);
+    window.requestAnimationFrame(() => mainRef.current?.scrollTo({ top: 0, behavior: "smooth" }));
+  }, []);
+
   useEffect(() => {
     v2Api.capabilities().then((result) => { setCapabilities(result.data); setCapabilitySource(result.source); }).catch(() => setCapabilities([]));
     refreshExecutions();
@@ -159,7 +165,7 @@ export function V2App() {
           </div>
         </header>
         <main ref={mainRef} id="v2-main" className={route === "live" ? "v2-main v2-main-live" : "v2-main"}>
-          <div className={`v2-route-state ${route === "agent" ? "active" : ""}`}><AgentView execution={agentExecution} enabled={route === "agent"} onRefresh={refreshExecutions} configuredRoles={roles} /></div>
+          <div className={`v2-route-state ${route === "agent" ? "active" : ""}`}><AgentView execution={agentExecution} enabled={route === "agent"} onRefresh={refreshExecutions} onStarted={focusExecution} configuredRoles={roles} /></div>
           <div className={`v2-route-state ${route === "live" ? "active" : ""}`}><LiveView execution={selectedExecution} enabled={route === "live"} /></div>
           <div className={`v2-route-state ${route === "compose" ? "active" : ""}`}><ComposeView /></div>
           <div className={`v2-route-state ${route === "workflows" ? "active" : ""}`}><WorkflowsView capabilities={capabilities} initialCapability={initialCapability} onConsumed={() => setInitialCapability("")} /></div>
