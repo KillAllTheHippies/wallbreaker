@@ -4,6 +4,7 @@ import { RoleChooser } from "../components/RoleChooser";
 import { v2Api } from "./api";
 import { CommandPalette, ROUTES } from "./CommandPalette";
 import { formatTime, StatusBadge } from "./components";
+import { mergeExecutionRefresh, selectionAfterExecutionRefresh } from "./executionFocus";
 import { AgentView, LiveView } from "./LiveView";
 import {
   ComposeView,
@@ -50,15 +51,17 @@ export function V2App() {
   const [initialCapability, setInitialCapability] = useState("");
   const [roles, setRoles] = useState<RoleAssignments | null>(null);
   const mainRef = useRef<HTMLElement | null>(null);
+  const pendingExecutionFocus = useRef<ExecutionSummary | null>(null);
   const scrollPositions = useRef<Partial<Record<V2Route, number>>>({});
 
   const refreshExecutions = useCallback(() => {
     v2Api.executions().then((result) => {
-      setExecutions(result.data);
-      setSelectedExecutionId((current) => {
-        if (current && result.data.some((item) => item.id === current)) return current;
-        return result.data.find(isActive)?.id || result.data[0]?.id || "";
-      });
+      const pending = pendingExecutionFocus.current;
+      setExecutions(mergeExecutionRefresh(result.data, pending));
+      setSelectedExecutionId((current) => selectionAfterExecutionRefresh(result.data, current, pending));
+      if (pending && result.data.some((item) => item.id === pending.id)) {
+        pendingExecutionFocus.current = null;
+      }
     }).catch(() => setExecutions([]));
   }, []);
 
@@ -67,6 +70,7 @@ export function V2App() {
   }, []);
 
   const focusExecution = useCallback((execution: ExecutionSummary) => {
+    pendingExecutionFocus.current = execution;
     setExecutions((current) => [execution, ...current.filter((item) => item.id !== execution.id)]);
     setSelectedExecutionId(execution.id);
     window.requestAnimationFrame(() => mainRef.current?.scrollTo({ top: 0, behavior: "smooth" }));
