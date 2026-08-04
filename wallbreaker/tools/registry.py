@@ -29,6 +29,14 @@ class ToolContext:
     # the authoritative loop controller: target tools feed its result back to
     # the attacker and mark the run successful at the behavior threshold.
     jef_behavior: str = ""
+    # JEF scoring policy. When false, each target output is scored independently;
+    # when true, continuation outputs are scored as the ordered conversation stream.
+    jef_cumulative: bool = True
+    # Post-pass policy: stop immediately, keep attacking for a stronger result, or
+    # enter an operator-requested verification phase.
+    jef_post_pass_mode: str = "stop_on_threshold"
+    jef_verification: bool = False
+    jef_phase: str = "attack"
     jef_evaluations: list[dict] = field(default_factory=list)
     jef_success: bool = False
     jef_success_evaluation: dict | None = None

@@ -1630,6 +1630,10 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
             raise HTTPException(status_code=503, detail=str(exc)) from exc
         if requested_behavior and jef_behavior is None:
             raise HTTPException(status_code=400, detail=f"unknown JEF behavior: {requested_behavior}")
+        cumulative_jef = bool(body.get("cumulative_jef", True))
+        jef_post_pass_mode = str(body.get("jef_post_pass_mode") or "stop_on_threshold").strip().lower()
+        if jef_post_pass_mode not in {"stop_on_threshold", "strengthen", "verify"}:
+            raise HTTPException(status_code=400, detail="jef_post_pass_mode must be stop_on_threshold, strengthen, or verify")
         if agent_active:
             raise HTTPException(status_code=409, detail="an agent run is already in progress")
         if dashboard_inference_lock.locked():
@@ -1683,6 +1687,8 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
                 "request_delay_ms": request_delay_ms,
                 "enabled_techniques": enabled_techniques,
                 "jef_behavior": jef_behavior["id"] if jef_behavior else "",
+                "cumulative_jef": cumulative_jef,
+                "jef_post_pass_mode": jef_post_pass_mode,
             },
         )
         queue: asyncio.Queue = asyncio.Queue()
@@ -1744,6 +1750,9 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
         registry.ctx.progress = progress
         registry.ctx.run_events = tool_run_event
         registry.ctx.jef_behavior = jef_behavior["id"] if jef_behavior else ""
+        registry.ctx.jef_cumulative = cumulative_jef
+        registry.ctx.jef_post_pass_mode = jef_post_pass_mode
+        registry.ctx.jef_verification = jef_post_pass_mode == "verify"
         registry.ctx.current_objective = objective
         def record_verdict(payload, response, label, reason, technique) -> None:
             evaluations = registry.ctx.jef_evaluations

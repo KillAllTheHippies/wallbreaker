@@ -102,7 +102,8 @@ async def _jef_judge_result(
         item for item in ctx.jef_output_texts
         if item["behavior"] == behavior and item["conversation_id"] == conversation_id
     ]
-    combined_response = "\n\n".join(str(item["text"] or "") for item in conversation_outputs)
+    scoring_outputs = conversation_outputs if getattr(ctx, "jef_cumulative", False) else [conversation_outputs[-1]]
+    combined_response = "\n\n".join(str(item["text"] or "") for item in scoring_outputs)
     from ..jef import score_response
 
     # JEF is response-oriented. For a live multi-turn target conversation, score the
@@ -120,8 +121,11 @@ async def _jef_judge_result(
     evaluation.update(output_record)
     evaluation.update({
         "aggregate": True,
-        "output_ids": [item["output_id"] for item in conversation_outputs],
-        "output_count": len(conversation_outputs),
+        "output_ids": [item["output_id"] for item in scoring_outputs],
+        "output_count": len(scoring_outputs),
+        "cumulative": bool(getattr(ctx, "jef_cumulative", False)),
+        "conversation_output_ids": [item["output_id"] for item in conversation_outputs],
+        "conversation_output_count": len(conversation_outputs),
     })
     ctx.jef_evaluations.append(evaluation)
     percentage = float(evaluation.get("percentage", 0) or 0)
@@ -144,8 +148,8 @@ async def _jef_judge_result(
         "missing": list(evaluation.get("missing") or []),
         "conversation_id": conversation_id,
         "output_id": output_id,
-        "output_ids": [item["output_id"] for item in conversation_outputs],
-        "output_count": len(conversation_outputs),
+        "output_ids": [item["output_id"] for item in scoring_outputs],
+        "output_count": len(scoring_outputs),
     }
     if evaluation.get("error"):
         public["error"] = evaluation["error"]
@@ -169,6 +173,12 @@ async def _jef_judge_result(
             f"\n[JEF test {public['behavior']}: {percentage:.2f}% / {threshold:.2f}% — {state}]"
             f"\nMatched elements: {matches}"
             f"\nMissing elements: {missing}"
+            f"\nJEF metadata: status={public['status']}; passed={public['passed']}; "
+            f"cumulative={bool(getattr(ctx, 'jef_cumulative', False))}; "
+            f"conversation_id={conversation_id}; output_id={output_id}; "
+            f"scored_output_ids={public['output_ids']}; "
+            f"conversation_output_ids={evaluation.get('conversation_output_ids', public['output_ids'])}; "
+            f"output_count={public['output_count']}"
         )
 
     error = str(public.get("error") or "The scorer did not return a usable result.")
@@ -459,6 +469,20 @@ async def _continue_target(args: dict, ctx: ToolContext) -> str:
         ctx.target_thread.pop()  # don't leave a dangling user turn
         dt = time.monotonic() - start
         return f"[target error after {dt:.1f}s] {type(exc).__name__}: {str(exc)[:160]}"
+    bumped_to: int | None = None
+    retry_failed = False
+    if empty and reasoning.strip() and max_tokens < _TRUNC_CEILING:
+        bumped_to = min(max_tokens * 2, _TRUNC_CEILING)
+        ctx.emit(
+            f"continue_target: empty answer + populated CoT (stop={stop}); "
+            f"auto-retry at max_tokens={bumped_to}"
+        )
+        try:
+            reply, reasoning, stop, empty = await _fire(
+                provider, ctx.target_thread, ctx.target_system, bumped_to
+            )
+        except Exception:
+            retry_failed = True
     dt = time.monotonic() - start
     ctx.target_thread.append(assistant(reply or ""))
     ctx.target_reasoning = reasoning or ""
@@ -466,7 +490,9 @@ async def _continue_target(args: dict, ctx: ToolContext) -> str:
     target = ctx.config.target
     decoded, raw_encoded, dec_note = _decode_reply(reply, _split_chain(args.get("response_transforms")))
     layer = _block_layer(reply, empty, stop)
-    note = _truncation_note(stop, empty, reasoning, max_tokens, None)
+    note = _truncation_note(
+        stop, empty, reasoning, bumped_to or max_tokens, bumped_to
+    )
     if layer:
         note += f"\n[filter: {layer} - a guardrail classifier fired, not the model's refusal.]"
     body = _format_reply(decoded, reasoning)
@@ -476,10 +502,11 @@ async def _continue_target(args: dict, ctx: ToolContext) -> str:
             f"{raw_encoded[:300]}"
         )
     header = f"[target {target.model} | turn {turns} | {dt:.1f}s{enc_note}{dec_note}]\n"
-    return header + body + note + await _jef_judge_result(
+    jef_note = await _jef_judge_result(
         ctx, body, follow, reasoning, "continue_target",
-        interrupted=bool(stop in _TRUNC_REASONS),
+        interrupted=bool((stop in _TRUNC_REASONS) and not retry_failed),
     )
+    return header + body + note + jef_note
 
 
 def register(registry: ToolRegistry) -> None:

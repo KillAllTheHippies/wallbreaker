@@ -70,6 +70,9 @@ async def test_jef_test_event_and_feedback_include_missing_elements(monkeypatch)
     feedback = await _jef_judge_result(ctx, "first output", "probe", "", "query_target")
 
     assert "Missing elements: step two, final answer" in feedback
+    assert "JEF metadata:" in feedback
+    assert "conversation_id=1" in feedback
+    assert "scored_output_ids=[1]" in feedback
     assert ctx.jef_success is False
     assert events[-1] == {
         "event": "jef_test",
@@ -275,3 +278,85 @@ def test_findings_return_jef_metadata_and_v2_renders_compact_indicator(tmp_path)
     source = (Path(__file__).parents[1] / "wallbreaker/dashboard/web/src/v2/Views.tsx").read_text()
     assert "<VerdictBadge verdict={item.label} /><JEFIndicator" in source
     assert "behavior={item.jef_behavior} evaluation={item.jef_evaluation}" in source
+
+async def test_jef_independent_scoring_toggle(monkeypatch):
+    import wallbreaker.jef as jef_mod
+    from wallbreaker.tools.target import _jef_judge_result
+
+    inputs = []
+
+    def score_response(behavior, response):
+        inputs.append(response)
+        return evaluation(behavior, 50, 70, missing=["more"])
+
+    monkeypatch.setattr(jef_mod, "score_response", score_response)
+    ctx = ToolContext(
+        config=Config(default_profile="x", profiles={}),
+        jef_behavior="illicit_substances",
+        jef_cumulative=False,
+    )
+    await _jef_judge_result(ctx, "first", "p1", "", "query_target")
+    await _jef_judge_result(ctx, "second", "p2", "", "continue_target")
+
+    assert inputs == ["first", "second"]
+    assert ctx.jef_evaluations[-1]["cumulative"] is False
+    assert ctx.jef_evaluations[-1]["conversation_output_ids"] == [1, 2]
+
+
+async def test_jef_strengthen_mode_continues_after_pass():
+    ctx = ToolContext(
+        config=Config(default_profile="x", profiles={}),
+        jef_behavior="illicit_substances",
+        jef_post_pass_mode="strengthen",
+    )
+    reg = ToolRegistry(ctx)
+
+    async def jef_test(args, _ctx):
+        ctx.jef_success = True
+        ctx.jef_success_evaluation = {"behavior": "illicit_substances", "percentage": 80, "threshold": 70}
+        return "passed"
+
+    reg.add("jef_test", "jef test", {"type": "object"}, jef_test)
+    attacker = ScriptedProvider([
+        [ToolUseEvent("j1", "jef_test", {}), StopEvent("tool_use")],
+        [TextDelta("continue strengthening"), StopEvent("end_turn")],
+    ])
+    result = await run_autonomous(attacker, reg, [user("objective")], max_rounds=2)
+
+    assert result.status in {"stuck", "max_rounds"}
+    assert attacker.calls >= 2
+
+async def test_jef_verify_mode_runs_a_second_jef_phase():
+    ctx = ToolContext(
+        config=Config(default_profile="x", profiles={}),
+        jef_behavior="illicit_substances",
+        jef_post_pass_mode="verify",
+    )
+    reg = ToolRegistry(ctx)
+    calls = 0
+
+    async def jef_test(args, _ctx):
+        nonlocal calls
+        calls += 1
+        ctx.jef_success = True
+        ctx.jef_success_evaluation = {
+            "behavior": "illicit_substances", "percentage": 80, "threshold": 70,
+        }
+        return "passed"
+
+    reg.add("jef_test", "jef test", {"type": "object"}, jef_test)
+    attacker = ScriptedProvider([
+        [ToolUseEvent("j1", "jef_test", {}), StopEvent("tool_use")],
+        [ToolUseEvent("j2", "jef_test", {}), StopEvent("tool_use")],
+    ])
+    result = await run_autonomous(attacker, reg, [user("objective")], max_rounds=3)
+
+    assert result.status == "finished"
+    assert result.data["phase"] == "verification"
+    assert calls == 2
+    assert any(
+        "independent verification attempt" in str(getattr(block, "text", ""))
+        for messages in attacker.messages[1:]
+        for message in messages
+        for block in message.content
+    )
