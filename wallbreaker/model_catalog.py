@@ -16,6 +16,10 @@ def catalog_path_for(config) -> Path:
 class ModelCatalog:
     def __init__(self, path: str | Path):
         self.path = Path(path)
+        # Config files and dashboard session roots are often created lazily.
+        # SQLite will not create missing parent directories, so a first remote
+        # model discovery can otherwise fail at the first upsert.
+        self.path.parent.mkdir(parents=True, exist_ok=True)
         self._initialize()
 
     def _connect(self):

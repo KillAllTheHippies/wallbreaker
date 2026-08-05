@@ -32,6 +32,14 @@ def test_catalog_persists_manual_and_configured_models(tmp_path):
     assert next(item for item in entries if item["model_id"] == "pasted-model")["source"] == "manual"
 
 
+def test_catalog_creates_missing_parent_directory(tmp_path):
+    path = tmp_path / "nested" / "catalog" / "models.sqlite3"
+    catalog = ModelCatalog(path)
+    catalog.upsert("featherless", "large-model", "remote")
+    assert catalog.list("featherless")[0]["model_id"] == "large-model"
+    assert path.exists()
+
+
 @pytest.mark.asyncio
 async def test_successful_completion_learns_model(tmp_path):
     endpoint = Endpoint("ep", "openai", "https://example.test/v1", "live-model")
