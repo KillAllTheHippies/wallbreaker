@@ -73,7 +73,7 @@ function executionStatus(value: unknown): ExecutionStatus {
   return "queued";
 }
 
-function normalizeExecution(value: unknown, source: "v2" | "legacy" = "v2"): ExecutionSummary {
+function normalizeExecution(value: unknown, source: "v2" | "history" = "v2"): ExecutionSummary {
   const row = object(value);
   return {
     ...row,
@@ -125,21 +125,6 @@ function normalizeEvent(value: unknown, executionId: string, index: number): Eve
   };
 }
 
-function capabilityFromLegacy(kind: ArsenalItem["kind"], value: unknown): Capability {
-  const row = object(value);
-  const name = text(row.name);
-  const category = kind === "tool" ? "Tools" : kind === "preset" ? "Presets" : "Transforms";
-  return {
-    id: `${kind}.${name}`,
-    title: name.replace(/[_-]+/g, " "),
-    description: text(row.description),
-    category,
-    execution_mode: kind === "tool" ? "queued" : "immediate",
-    input_schema: kind === "tool" ? object(row.parameters) : undefined,
-    legacy_only: true,
-  };
-}
-
 function listPayload(value: unknown, keys: string[]): unknown[] {
   if (Array.isArray(value)) return value;
   const row = object(value);
@@ -153,75 +138,34 @@ export const v2Api = {
     return Array.isArray(body.behaviors) ? body.behaviors : [];
   },
   async capabilities(): Promise<ApiResult<Capability[]>> {
-    try {
-      const body = await request<unknown>("/api/v2/capabilities");
-      const capabilities = listPayload(body, ["capabilities", "items"]).map((item) => {
-        const row = object(item);
-        const schema = object(row.input_schema || row.argument_schema);
-        return {
-          ...row,
-          id: text(row.id || row.name),
-          title: text(row.title || row.name || row.id),
-          category: text(row.category || "Other"),
-          input_schema: Object.keys(schema).length ? schema : undefined,
-        } as Capability;
-      }).filter((item) => item.id);
-      return { data: capabilities, source: "v2" };
-    } catch {
-      const [presets, transforms, tools] = await Promise.all([
-        request<unknown[]>("/api/presets").catch(() => []),
-        request<unknown[]>("/api/transforms").catch(() => []),
-        request<unknown[]>("/api/tools").catch(() => []),
-      ]);
+    const body = await request<unknown>("/api/v2/capabilities");
+    const capabilities = listPayload(body, ["capabilities", "items"]).map((item) => {
+      const row = object(item);
+      const schema = object(row.input_schema || row.argument_schema);
       return {
-        data: [
-          ...presets.map((item) => capabilityFromLegacy("preset", item)),
-          ...transforms.map((item) => capabilityFromLegacy("transform", item)),
-          ...tools.map((item) => capabilityFromLegacy("tool", item)),
-        ],
-        source: "legacy",
-      };
-    }
+        ...row,
+        id: text(row.id || row.name),
+        title: text(row.title || row.name || row.id),
+        category: text(row.category || "Other"),
+        input_schema: Object.keys(schema).length ? schema : undefined,
+      } as Capability;
+    }).filter((item) => item.id);
+    return { data: capabilities, source: "v2" };
   },
 
   async executions(): Promise<ApiResult<ExecutionSummary[]>> {
-    try {
-      const body = await request<unknown>("/api/v2/executions");
-      return {
-        data: listPayload(body, ["executions", "items"]).map((item) => normalizeExecution(item)),
-        source: "v2",
-      };
-    } catch {
-      const [status, runs] = await Promise.all([
-        request<Record<string, unknown>>("/api/agent/status").catch(() => ({})),
-        request<RunSummary[]>("/api/runs").catch(() => []),
-      ]);
-      const statusRecord = object(status);
-      const active = statusRecord.active ? [{
-        id: "legacy-active",
-        title: text(statusRecord.objective) || "Active engagement",
-        objective: text(statusRecord.objective) || undefined,
-        status: statusRecord.paused ? "paused" as const : "running" as const,
-        attacker: text(statusRecord.attacker) || undefined,
-        source: "legacy" as const,
-      }] : [];
-      const completed = runs.map((run) => normalizeExecution({
-        id: run.name,
-        run_id: run.name,
-        title: run.name,
-        status: "succeeded",
-        created_at: run.time,
-        ...run.models,
-      }, "legacy"));
-      return { data: [...active, ...completed], source: "legacy" };
-    }
+    const body = await request<unknown>("/api/v2/executions");
+    return {
+      data: listPayload(body, ["executions", "items"]).map((item) => normalizeExecution(item)),
+      source: "v2",
+    };
   },
 
   execution: async (id: string) => normalizeExecution(
     await request<unknown>(`/api/v2/executions/${encodeURIComponent(id)}`),
   ),
 
-  async legacyEvents(run: string): Promise<EventEnvelope[]> {
+  async storedRunEvents(run: string): Promise<EventEnvelope[]> {
     const body = await request<Record<string, unknown>>(`/api/runs/${encodeURIComponent(run)}`);
     const records = Array.isArray(body.records) ? body.records : [];
     return records.map((record, index) => normalizeEvent(record, run, index));
@@ -262,30 +206,23 @@ export const v2Api = {
   createExecution: (capabilityId: string, args: Record<string, unknown>, mode: ExecutionMode) =>
     request<ExecutionSummary>("/api/v2/executions", json({ capability_id: capabilityId, args, mode })).then((value) => normalizeExecution(value)),
 
-  pause: async (execution: ExecutionSummary) => execution.source === "legacy"
-    ? request<ExecutionSummary>("/api/agent/pause", { method: "POST" }).then((value) => normalizeExecution(value, "legacy"))
-    : request<ExecutionSummary>(`/api/v2/executions/${encodeURIComponent(execution.id)}/pause`, { method: "POST" }).then((value) => normalizeExecution(value)),
+  pause: async (execution: ExecutionSummary) => request<ExecutionSummary>(`/api/v2/executions/${encodeURIComponent(execution.id)}/pause`, { method: "POST" }).then((value) => normalizeExecution(value)),
 
-  resume: async (execution: ExecutionSummary) => execution.source === "legacy"
-    ? request<ExecutionSummary>("/api/agent/resume", { method: "POST" }).then((value) => normalizeExecution(value, "legacy"))
-    : request<ExecutionSummary>(`/api/v2/executions/${encodeURIComponent(execution.id)}/resume`, { method: "POST" }).then((value) => normalizeExecution(value)),
+  resume: async (execution: ExecutionSummary) => request<ExecutionSummary>(`/api/v2/executions/${encodeURIComponent(execution.id)}/resume`, { method: "POST" }).then((value) => normalizeExecution(value)),
 
   cancel: async (execution: ExecutionSummary) => {
-    if (execution.source === "legacy") throw new Error("Hard cancellation requires the V2 execution service.");
     return request<ExecutionSummary>(`/api/v2/executions/${encodeURIComponent(execution.id)}/cancel`, { method: "POST" }).then((value) => normalizeExecution(value));
   },
 
   switchAttacker: (execution: ExecutionSummary, body: { provider?: string; model?: string; profile?: string }) =>
     request<ExecutionSummary>(`/api/v2/executions/${encodeURIComponent(execution.id)}/attacker`, json(body)).then((value) => normalizeExecution(value)),
 
-  steer: async (execution: ExecutionSummary, message: string) => execution.source === "legacy"
-    ? request<{ ok: boolean }>("/api/agent/steer", json({ message }))
-    : request<{ ok: boolean }>(`/api/v2/executions/${encodeURIComponent(execution.id)}/steer`, json({ message })),
+  steer: async (execution: ExecutionSummary, message: string) => request<{ ok: boolean }>(`/api/v2/executions/${encodeURIComponent(execution.id)}/steer`, json({ message })),
 
-  compose: (body: ComposePayload) => request<ComposeResult>("/api/compose", json(body)),
-  fire: (body: ComposePayload & { source?: string }) => request<ComposeResult>("/api/fire", json(body)),
-  consoleConversation: () => request<ConsoleConversation>("/api/console/conversation"),
-  resetConsoleConversation: () => request<ConsoleConversation & { ok: boolean }>("/api/console/conversation/reset", { method: "POST" }),
+  compose: (body: ComposePayload) => request<ComposeResult>("/api/v2/compose", json(body)),
+  fire: (body: ComposePayload & { source?: string }) => request<ComposeResult>("/api/v2/fire", json(body)),
+  consoleConversation: () => request<ConsoleConversation>("/api/v2/console/conversation"),
+  resetConsoleConversation: () => request<ConsoleConversation & { ok: boolean }>("/api/v2/console/conversation/reset", { method: "POST" }),
   presets: () => request<Array<Record<string, unknown>>>("/api/presets"),
   transforms: () => request<Array<Record<string, unknown>>>("/api/transforms"),
   tools: () => request<Array<Record<string, unknown>>>("/api/tools"),

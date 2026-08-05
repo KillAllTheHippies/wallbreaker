@@ -1244,7 +1244,7 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
     agent_active = False
     agent_control = None
 
-    @app.post("/api/compose")
+    @app.post("/api/v2/compose")
     def compose(body: dict):
         from ..jef import JEFUnavailable
 
@@ -1276,11 +1276,11 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
                 fresh.path = sessions / f"run-{stamp.strftime('%Y%m%d-%H%M%S')}.jsonl"
         return fresh
 
-    @app.get("/api/console/conversation")
+    @app.get("/api/v2/console/conversation")
     def console_conversation_get():
         return _console_conversation_view()
 
-    @app.post("/api/console/conversation/reset")
+    @app.post("/api/v2/console/conversation/reset")
     async def console_conversation_reset():
         if dashboard_inference_lock.locked():
             raise HTTPException(status_code=409, detail="wait for the current turn to finish before resetting")
@@ -1307,7 +1307,7 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
             **_console_conversation_view(),
         }
 
-    @app.post("/api/fire")
+    @app.post("/api/v2/fire")
     async def fire(body: dict):
         if config is None:
             raise HTTPException(status_code=400, detail="no [target] configured in config.toml")
@@ -1470,7 +1470,7 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
             "objective": str(agent_control.get("objective") or ""),
         }
 
-    @app.get("/api/agent/status")
+    @app.get("/api/v2/agent/status")
     async def agent_status():
         return _agent_status_view()
 
@@ -1479,7 +1479,7 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
             raise HTTPException(status_code=409, detail="no agent run is active")
         return agent_control
 
-    @app.post("/api/agent/steer")
+    @app.post("/api/v2/agent/steer")
     async def agent_steer(body: dict):
         control = _active_control()
         message = str(body.get("message") or "").strip()
@@ -1490,7 +1490,7 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
         control["push"]({"type": "steer_queued", "text": message})
         return {"ok": True, "queued": len(control["feedback"])}
 
-    @app.post("/api/agent/pause")
+    @app.post("/api/v2/agent/pause")
     async def agent_pause():
         control = _active_control()
         control["paused"] = True
@@ -1503,7 +1503,7 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
         })
         return _agent_status_view()
 
-    @app.post("/api/agent/resume")
+    @app.post("/api/v2/agent/resume")
     async def agent_resume():
         control = _active_control()
         control["paused"] = False
@@ -1513,7 +1513,7 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
         control["push"]({"type": "control", "state": "running", "message": "Run resumed."})
         return _agent_status_view()
 
-    @app.post("/api/agent/attacker")
+    @app.post("/api/v2/agent/attacker")
     async def agent_attacker_switch(body: dict):
         control = _active_control()
         if not control.get("pause_ready"):
@@ -1552,7 +1552,7 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
         })
         return _agent_status_view()
 
-    @app.post("/api/agent/run")
+    @app.post("/api/v2/agent/run")
     async def agent_run(body: dict):
         nonlocal agent_active, agent_control
         from fastapi.responses import StreamingResponse
@@ -2390,12 +2390,6 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
 
     dist = _web_dist(web_dir)
     if dist is not None:
-        from fastapi.responses import FileResponse
-
-        @app.get("/v2", include_in_schema=False)
-        def v2_shell():
-            return FileResponse(dist / "index.html")
-
         app.mount("/", StaticFiles(directory=str(dist), html=True), name="web")
     else:
         @app.get("/")
@@ -2403,7 +2397,7 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
             return {
                 "message": "Wallbreaker dashboard API is running, but the web UI is not built.",
                 "build": "cd wallbreaker/dashboard/web && npm install && npm run build",
-                "api": "/api/overview",
+                "api": "/api/v2/capabilities",
             }
 
     return app

@@ -75,7 +75,7 @@ function StepField({ name, property, value, onChange }: {
 
 function capabilityFromEvent(event: HistoryEvent, capabilities: Capability[]): Capability | null {
   let structured: Record<string, unknown> = {};
-  try { structured = JSON.parse(event.structured_json) as Record<string, unknown>; } catch { /* malformed legacy row */ }
+  try { structured = JSON.parse(event.structured_json) as Record<string, unknown>; } catch { /* malformed stored row */ }
   const nested = [structured, structured.data, structured.request, structured.composed]
     .filter((value): value is Record<string, unknown> => Boolean(value && typeof value === "object" && !Array.isArray(value)));
   const candidates = [
@@ -136,7 +136,7 @@ export function WorkflowStudio({ capabilities, initialCapability, onConsumed }: 
   onConsumed: () => void;
 }) {
   const executable = useMemo(() => capabilities.filter((item) =>
-    !item.legacy_only && item.id !== "agent.run" && (item.id.startsWith("tool.") || item.id.startsWith("tui."))
+    item.id !== "agent.run" && (item.id.startsWith("tool.") || item.id.startsWith("tui."))
   ), [capabilities]);
   const [saved, setSaved] = useState<SavedWorkflow[]>(() => readJson(WORKFLOW_KEY, []));
   const [draft, setDraft] = useState<DraftWorkflow>(() => readJson(DRAFT_KEY, emptyDraft()));

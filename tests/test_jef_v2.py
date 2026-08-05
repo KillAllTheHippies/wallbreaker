@@ -62,7 +62,7 @@ def test_v2_jef_endpoint_is_display_only(tmp_path):
 def test_agent_run_rejects_unknown_jef_behavior(tmp_path):
     client = TestClient(create_app(config=None, sessions_dir=tmp_path))
     response = client.post(
-        "/api/agent/run",
+        "/api/v2/agent/run",
         json={"objective": "authorized evaluation", "jef_behavior": "unknown"},
     )
     assert response.status_code == 400
@@ -118,10 +118,10 @@ def test_compose_conversation_retains_jef_behavior_and_run_metadata(monkeypatch,
     client = TestClient(create_app(config=cfg, sessions_dir=sessions))
 
     first = client.post(
-        "/api/fire", json={"request": "first", "jef_behavior": "harry_potter"}
+        "/api/v2/fire", json={"request": "first", "jef_behavior": "harry_potter"}
     ).json()
-    second = client.post("/api/fire", json={"request": "follow up"}).json()
-    state = client.get("/api/console/conversation").json()
+    second = client.post("/api/v2/fire", json={"request": "follow up"}).json()
+    state = client.get("/api/v2/console/conversation").json()
 
     assert first["turn"]["jef_behavior"] == "harry_potter"
     assert first["turn"]["jef_evaluation"]["behavior"] == "harry_potter"
@@ -134,12 +134,12 @@ def test_compose_conversation_retains_jef_behavior_and_run_metadata(monkeypatch,
     }
     assert registries[0].calls[1][1]["prompt"] == "follow up"
     changed = client.post(
-        "/api/fire", json={"request": "changed", "jef_behavior": "fentanyl"}
+        "/api/v2/fire", json={"request": "changed", "jef_behavior": "fentanyl"}
     )
     assert changed.status_code == 400
     assert "locked" in changed.json()["detail"]
 
-    reset = client.post("/api/console/conversation/reset").json()
+    reset = client.post("/api/v2/console/conversation/reset").json()
     assert reset["jef_behavior"] == ""
     assert reset["retained_setup"] == state["opening"]
     assert reset["opening"] == {}
@@ -195,7 +195,7 @@ def test_agent_and_v2_execution_propagate_jef_behavior(monkeypatch, tmp_path):
     monkeypatch.setattr(tools_mod, "build_registry", lambda _config: registry)
 
     with TestClient(create_app(config=cfg, sessions_dir=sessions)) as client:
-        with client.stream("POST", "/api/agent/run", json={
+        with client.stream("POST", "/api/v2/agent/run", json={
             "objective": "authorized objective",
             "max_rounds": 1,
             "jef_behavior": "chinese_censorship",

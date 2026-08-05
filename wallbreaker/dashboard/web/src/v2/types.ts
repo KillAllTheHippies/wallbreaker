@@ -38,7 +38,7 @@ export interface ExecutionSummary {
   output_tokens?: number;
   budget_used?: number;
   budget_limit?: number;
-  source?: "v2" | "legacy";
+  source?: "v2" | "history";
   [key: string]: unknown;
 }
 
@@ -99,7 +99,6 @@ export interface Capability {
   };
   defaults?: Record<string, unknown>;
   result_types?: string[];
-  legacy_only?: boolean;
 }
 
 export interface JEFBehavior {
@@ -271,5 +270,5 @@ export interface SettingsRecord {
 
 export interface ApiResult<T> {
   data: T;
-  source: "v2" | "legacy";
+  source: "v2";
 }

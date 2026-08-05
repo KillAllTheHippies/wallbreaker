@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api as legacyApi, type RoleAssignments } from "../api";
+import { api as platformApi, type RoleAssignments } from "../api";
 import { RoleChooser } from "../components/RoleChooser";
 import { v2Api } from "./api";
 import { CommandPalette, ROUTES } from "./CommandPalette";
@@ -45,7 +45,7 @@ export function V2App() {
   const [railCollapsed, setRailCollapsed] = useState(() => window.localStorage.getItem("wallbreaker-v2-rail-collapsed") === "true");
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [capabilities, setCapabilities] = useState<Capability[]>([]);
-  const [capabilitySource, setCapabilitySource] = useState<"v2" | "legacy">("legacy");
+  const [capabilitySource, setCapabilitySource] = useState("v2");
   const [executions, setExecutions] = useState<ExecutionSummary[]>([]);
   const [selectedExecutionId, setSelectedExecutionId] = useState("");
   const [initialCapability, setInitialCapability] = useState("");
@@ -75,7 +75,7 @@ export function V2App() {
   }, []);
 
   const refreshRoles = useCallback(() => {
-    legacyApi.roles().then(setRoles).catch(() => setRoles(null));
+    platformApi.roles().then(setRoles).catch(() => setRoles(null));
   }, []);
 
   const focusExecution = useCallback((execution: ExecutionSummary) => {

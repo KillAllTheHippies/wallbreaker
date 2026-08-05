@@ -74,13 +74,13 @@ def test_pause_gate_applies_steering_to_first_resumed_turn():
 
 def test_agent_control_routes_report_inactive(tmp_path):
     client = TestClient(create_app(config=None, sessions_dir=tmp_path))
-    assert client.get("/api/agent/status").json() == {
+    assert client.get("/api/v2/agent/status").json() == {
         "active": False, "paused": False, "attacker": "", "provider": "",
     }
-    assert client.post("/api/agent/pause").status_code == 409
-    assert client.post("/api/agent/resume").status_code == 409
-    assert client.post("/api/agent/steer", json={"message": "pivot"}).status_code == 409
-    assert client.post("/api/agent/attacker", json={"provider": "x", "model": "y"}).status_code == 409
+    assert client.post("/api/v2/agent/pause").status_code == 409
+    assert client.post("/api/v2/agent/resume").status_code == 409
+    assert client.post("/api/v2/agent/steer", json={"message": "pivot"}).status_code == 409
+    assert client.post("/api/v2/agent/attacker", json={"provider": "x", "model": "y"}).status_code == 409
 
 
 def test_agent_run_filters_optional_techniques_but_keeps_controls(monkeypatch, tmp_path):
@@ -120,7 +120,7 @@ def test_agent_run_filters_optional_techniques_but_keeps_controls(monkeypatch, t
     monkeypatch.setattr(tools_mod, "build_registry", lambda _config: registry)
 
     client = TestClient(create_app(config=config, sessions_dir=tmp_path / "sessions"))
-    with client.stream("POST", "/api/agent/run", json={
+    with client.stream("POST", "/api/v2/agent/run", json={
         "objective": "test", "max_rounds": 1, "enabled_techniques": [],
     }) as response:
         assert response.status_code == 200

@@ -107,10 +107,9 @@ wallbreaker dashboard
 
 Open these local URLs:
 
-- WebUI V2: <http://127.0.0.1:8787/v2>
-- Original dashboard: <http://127.0.0.1:8787/legacy>
+- Dashboard: <http://127.0.0.1:8787/>
 
-V2 separates operation from observation. **Agent** runs and steers the Attack → Target
+The dashboard separates operation from observation. **Agent** runs and steers the Attack → Target
 → Judge loop, while **Live** observes either the current execution or a selected
 historical run. Compose, Workflows, Arsenal, Findings, Runs and Logs, Reports, Models,
 and Settings expose the rest of the operator surface.

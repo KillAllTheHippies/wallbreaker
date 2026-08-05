@@ -52,15 +52,14 @@ function useExecutionEvents(
     setEvents([]);
     setStreamState("idle");
     if (!execution) return;
-    if (execution.source === "legacy" && execution.id !== "legacy-active") {
+    if (execution.source === "history") {
       setStreamState("loading");
-      v2Api.legacyEvents(execution.run_id || execution.id).then((loaded) => {
+      v2Api.storedRunEvents(execution.run_id || execution.id).then((loaded) => {
         setEvents(loaded);
         setStreamState("complete");
       }).catch(() => setStreamState("unavailable"));
       return;
     }
-    if (execution.source === "legacy") { setStreamState("legacy-live"); return; }
     const controller = new AbortController();
     let reconnect = 0;
     let timer = 0;
@@ -95,11 +94,11 @@ function useExecutionEvents(
 
 function historicalExecution(run: HistoricalRunOption): ExecutionSummary {
   return {
-    id: `legacy:${run.run_name}`,
+    id: `history:${run.run_name}`,
     run_id: run.run_name,
     title: run.run_name,
     status: "succeeded",
-    source: "legacy",
+    source: "history",
     created_at: run.first_timestamp,
     finished_at: run.last_timestamp,
   };
@@ -452,7 +451,7 @@ function RunStrip({ execution, onRefresh }: { execution: ExecutionSummary | null
       </div>
     </header>
     {error && <ErrorBanner message={error} onDismiss={() => setError("")} />}
-    {execution?.status === "paused" && execution.source !== "legacy" && <AttackerSwitcher execution={execution} onRefresh={onRefresh} />}
+    {execution?.status === "paused" && <AttackerSwitcher execution={execution} onRefresh={onRefresh} />}
   </>;
 }
 
@@ -678,7 +677,7 @@ export function LiveView({ execution, enabled = true }: { execution: ExecutionSu
     }).catch(() => setHistoricalRuns([]));
   }, [enabled, execution?.id]);
   useEffect(() => {
-    if (execution?.source === "legacy") setHistoricalRun(execution.run_id || execution.id);
+    if (execution?.source === "history") setHistoricalRun(execution.run_id || execution.id);
     else if (execution) setHistoricalRun("");
   }, [execution?.id, execution?.source, execution?.run_id]);
   useEffect(() => { liveTailRef.current = liveTail; if (liveTail) setUnread(0); }, [liveTail]);

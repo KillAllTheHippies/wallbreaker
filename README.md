@@ -328,9 +328,8 @@ cd wallbreaker/dashboard/web && npm install && npm run build && cd -
 wallbreaker dashboard                                # binds to 127.0.0.1:8787
 ```
 
-Open WebUI V2 at <http://127.0.0.1:8787/v2>. The original dashboard remains available at
-<http://127.0.0.1:8787/legacy> during the parity rollout. The backend reuses the same
-engine as the TUI. For frontend hot-reload, run `npm run dev` in
+Open the dashboard at <http://127.0.0.1:8787/>. The backend reuses the same engine as the
+TUI. For frontend hot-reload, run `npm run dev` in
 `wallbreaker/dashboard/web`; it proxies `/api` to the dashboard backend.
 
 ### Configure providers and models in WebUI V2
@@ -339,7 +338,7 @@ engine as the TUI. For frontend hot-reload, run `npm run dev` in
 2. Under **Provider management**, choose **Add provider** and enter a unique name.
 3. Select the provider protocol: **OpenAI compatible**, **Anthropic compatible**, or the
    keyless local **Claude Code** integration.
-4. Enter the provider's base URL and default model. For compatible services, use the
+4. Enter the provider's base URL. For compatible services, use the
    service root expected by that provider; override the inference or models path only when
    the service does not use the protocol default.
 5. For an API provider, enter the environment-variable name used for its key and provide
@@ -347,8 +346,8 @@ engine as the TUI. For frontend hot-reload, run `npm run dev` in
    **Bearer token** or **x-api-key**. Credentials are stored locally and are not returned by
    the dashboard API.
 6. Set modality, reasoning, and timeout options, then choose **Save provider**.
-7. Choose **Verify credentials**. This performs a real authenticated inference and attempts
-   model discovery; a provider is ready only when that verification succeeds.
+7. Choose **Verify credentials**. This fetches the authenticated model catalog without
+   sending an inference request.
 8. Under **Attacker, target, and judge profiles**, create or edit the named profiles that
    assign providers and model IDs to each role. Activate the profiles you want the Agent and
    Compose workspaces to use.
