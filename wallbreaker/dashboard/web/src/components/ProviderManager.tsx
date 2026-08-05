@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, type ProviderRecord } from "../api";
 import { invalidateModelCatalog, invalidateProviders, loadProviders } from "../dataCache";
-import { ModelChooser } from "./ModelChooser";
 
 const EMPTY = {
   name: "", protocol: "openai", base_url: "", model: "", api_key_env: "",
@@ -46,13 +45,13 @@ export function ProviderManager({ onChanged }: { onChanged?: () => void }) {
     setTestResults((current) => ({ ...current, [provider.name]: { ok: true, message: "Testing connection…" } }));
     try {
       const result = await api.testProvider(provider.name);
-      if (!result.ok || !result.inference?.ok) throw new Error(result.error || "Authenticated inference failed");
+      if (!result.ok || !result.fetched) throw new Error(result.error || "Model catalog unavailable");
       const count = result.models.length;
       setTestResults((current) => ({
         ...current,
         [provider.name]: {
           ok: true,
-          message: `Authenticated inference passed · ${result.model} · ${result.inference.latency_ms} ms · ${count} model${count === 1 ? "" : "s"} discovered`,
+          message: `Credentials accepted · ${count} model${count === 1 ? "" : "s"} discovered`,
         },
       }));
       invalidateModelCatalog(provider.name);
@@ -75,19 +74,17 @@ export function ProviderManager({ onChanged }: { onChanged?: () => void }) {
       <div className="provider-list" role="table" aria-label="Provider connections">
         <div className="provider-table-header" role="row">
           <span role="columnheader">Provider</span>
-          <span role="columnheader">Default model</span>
           <span role="columnheader">API key variable</span>
           <span role="columnheader">Status</span>
           <span role="columnheader">Actions</span>
         </div>
         {providers.map((provider) => <div className="provider-row" role="row" key={provider.name}>
           <div role="cell"><b>{provider.name}</b><small>{provider.protocol} · {provider.base_url || "local CLI"}</small></div>
-          <div role="cell" className="provider-model mono">{provider.model || "Not set"}</div>
           <div role="cell" className="provider-api mono">{provider.api_key_env || "Not required"}</div>
           <div role="cell" className="provider-state"><span className={`status-dot ${provider.enabled ? "live" : ""}`} /><span>{provider.enabled ? "Enabled" : "Disabled"}</span></div>
           <div role="cell" className="row-actions">
             <button type="button" title="Edit provider" onClick={() => edit(provider)}>Edit</button>
-            <button type="button" title="Run an authenticated inference and fetch available models" disabled={busy || testing !== null} onClick={() => void testConnection(provider)}>{testing === provider.name ? "Verifying…" : "Verify credentials"}</button>
+            <button type="button" title="Fetch the provider model catalog" disabled={busy || testing !== null} onClick={() => void testConnection(provider)}>{testing === provider.name ? "Verifying…" : "Verify credentials"}</button>
             {provider.enabled
               ? <button type="button" disabled={busy || testing !== null} onClick={() => void act(() => api.disableProvider(provider.name), "Provider disabled")}>Disable</button>
               : <button type="button" disabled={busy || testing !== null} onClick={() => void act(() => api.enableProvider(provider.name), "Provider enabled")}>Enable</button>}
@@ -104,13 +101,6 @@ export function ProviderManager({ onChanged }: { onChanged?: () => void }) {
           <label>Name<input value={String(form.name || "")} onChange={(e) => update("name", e.target.value)} /></label>
           <label>Protocol<select value={String(form.protocol)} onChange={(e) => update("protocol", e.target.value)}><option value="openai">OpenAI compatible</option><option value="anthropic">Anthropic compatible</option><option value="claude-code">Claude Code</option></select></label>
           <label className="wide">Base URL<input value={String(form.base_url || "")} placeholder="https://api.example.com/v1" onChange={(e) => update("base_url", e.target.value)} /></label>
-          <label>Default model (optional)<ModelChooser
-            profile={String(form.name || "")}
-            value={String(form.model || "")}
-            onChange={(value) => update("model", value)}
-            placeholder="Type or choose a model id"
-            ariaLabel="Default model"
-          /></label>
           <label>Key environment variable<input value={String(form.api_key_env || "")} placeholder="PROVIDER_API_KEY" onChange={(e) => update("api_key_env", e.target.value)} /></label>
           <label>API key<input type="password" value={String(form.api_key || "")} placeholder={form.has_api_key ? "Stored; enter to replace" : "Stored locally in .env"} onChange={(e) => update("api_key", e.target.value)} /></label>
           <label>Authentication<select value={String(form.auth_style || "bearer")} onChange={(e) => update("auth_style", e.target.value)}><option value="bearer">Bearer token</option><option value="x-api-key">x-api-key</option></select></label>

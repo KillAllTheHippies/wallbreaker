@@ -896,50 +896,11 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
         if endpoint is None:
             raise HTTPException(status_code=404, detail=f"unknown provider '{name}'")
         catalog = await _discover_profile_models(name, endpoint)
-        model = str(getattr(endpoint, "model", "") or "").strip()
-        if not model:
-            for assignment in _roles_view().values():
-                if assignment.get("provider") == name and assignment.get("model"):
-                    model = str(assignment["model"])
-                    break
-        if not model and catalog["models"]:
-            model = str(catalog["models"][0])
-        if not model:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Provider '{name}' has no model configured to test.",
-            )
-
-        test_endpoint = dataclasses.replace(
-            endpoint,
-            model=model,
-            timeout=max(5.0, min(float(getattr(endpoint, "timeout", 0) or 30), 30.0)),
-        )
-        provider = None
-        started = time.monotonic()
-        try:
-            provider = build_provider(test_endpoint, timeout=30)
-            prompt = user("Connectivity check. Reply with OK.")
-            if getattr(test_endpoint, "modality", "text") == "image":
-                result = await provider.generate([prompt], max_tokens=16)
-                preview = f"Generated {len(result.images)} image(s)"
-                test_kind = "image_generation"
-            else:
-                response = await provider.complete([prompt], max_tokens=32)
-                preview = response.strip().replace("\n", " ")[:160]
-                test_kind = "completion"
-        except Exception as exc:
-            detail = f"{type(exc).__name__}: {exc}"
-            secret = str(endpoint.resolved_key() or "")
-            if secret:
-                detail = detail.replace(secret, "[redacted]")
+        if catalog["error"]:
             raise HTTPException(
                 status_code=502,
-                detail=f"Authenticated inference failed for '{name}' using '{model}': {detail}",
-            ) from exc
-        finally:
-            if provider is not None:
-                await provider.aclose()
+                detail=f"Model catalog verification failed for '{name}': {catalog['error']}",
+            )
 
         if catalog["fetched"] and model_catalog is not None:
             model_catalog.sync(name, catalog["models"], "remote")
@@ -947,13 +908,6 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
         return {
             "ok": True,
             **catalog,
-            "model": model,
-            "inference": {
-                "ok": True,
-                "kind": test_kind,
-                "latency_ms": round((time.monotonic() - started) * 1000),
-                "response_preview": preview,
-            },
         }
 
     def _roles_view() -> dict:

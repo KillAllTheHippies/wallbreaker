@@ -133,13 +133,7 @@ export interface ModelCatalog {
 
 export interface ProviderTestResult extends ModelCatalog {
   ok: boolean;
-  model: string;
-  inference: {
-    ok: boolean;
-    kind: "completion" | "image_generation";
-    latency_ms: number;
-    response_preview: string;
-  };
+  refreshed_at?: string;
 }
 
 export interface ProviderRecord extends ProfileDetail {

@@ -26,7 +26,7 @@ def test_v2_capabilities_include_every_tui_command(tmp_path):
     assert represented == set(TUI_SOURCE.known_commands)
 
 
-def test_provider_test_requires_authenticated_inference(tmp_path, monkeypatch):
+def test_provider_test_reports_catalog_authentication_failure(tmp_path, monkeypatch):
     endpoint = Endpoint(
         name="strict-test", protocol="openai", base_url="https://example.test/v1",
         model="test-model", api_key="super-secret-invalid-key",
@@ -39,24 +39,23 @@ def test_provider_test_requires_authenticated_inference(tmp_path, monkeypatch):
             "models": ["test-model"], "fetched": True, "error": "",
         }
 
-    class RejectingProvider:
-        async def complete(self, messages, **kwargs):
-            raise RuntimeError("401 invalid key super-secret-invalid-key")
+    fake_discover_result = {
+        "profile": "strict-test", "protocol": "openai", "models": [],
+        "fetched": False, "error": "Model catalog unavailable: HTTP 401 Missing Authentication header",
+    }
+    async def failing_discover(name, discovered_endpoint):
+        return fake_discover_result
 
-        async def aclose(self):
-            return None
-
-    monkeypatch.setattr(dashboard_server, "_discover_profile_models", fake_discover)
-    monkeypatch.setattr(dashboard_server, "build_provider", lambda endpoint, timeout=None: RejectingProvider())
+    monkeypatch.setattr(dashboard_server, "_discover_profile_models", failing_discover)
     response = TestClient(create_app(config=config, sessions_dir=tmp_path)).post(
         "/api/providers/strict-test/test"
     )
     assert response.status_code == 502
-    assert "Authenticated inference failed" in response.json()["detail"]
+    assert "Model catalog verification failed" in response.json()["detail"]
     assert "super-secret-invalid-key" not in response.text
 
 
-def test_provider_test_reports_verified_model_and_latency(tmp_path, monkeypatch):
+def test_provider_test_reports_discovered_catalog_without_inference(tmp_path, monkeypatch):
     endpoint = Endpoint(
         name="strict-test", protocol="openai", base_url="https://example.test/v1",
         model="test-model", api_key="valid-key",
@@ -69,24 +68,15 @@ def test_provider_test_reports_verified_model_and_latency(tmp_path, monkeypatch)
             "models": ["test-model"], "fetched": True, "error": "",
         }
 
-    class AcceptingProvider:
-        async def complete(self, messages, **kwargs):
-            return "OK"
-
-        async def aclose(self):
-            return None
-
     monkeypatch.setattr(dashboard_server, "_discover_profile_models", fake_discover)
-    monkeypatch.setattr(dashboard_server, "build_provider", lambda endpoint, timeout=None: AcceptingProvider())
     response = TestClient(create_app(config=config, sessions_dir=tmp_path)).post(
         "/api/providers/strict-test/test"
     )
     assert response.status_code == 200
     payload = response.json()
     assert payload["ok"] is True
-    assert payload["model"] == "test-model"
-    assert payload["inference"]["ok"] is True
-    assert payload["inference"]["response_preview"] == "OK"
+    assert payload["models"] == ["test-model"]
+    assert "inference" not in payload
 
 
 def test_v2_execution_crud_and_validation(tmp_path):
