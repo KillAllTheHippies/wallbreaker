@@ -2442,10 +2442,6 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
         def v2_shell():
             return FileResponse(dist / "index.html")
 
-        @app.get("/legacy", include_in_schema=False)
-        def legacy_shell():
-            return FileResponse(dist / "index.html")
-
         app.mount("/", StaticFiles(directory=str(dist), html=True), name="web")
     else:
         @app.get("/")

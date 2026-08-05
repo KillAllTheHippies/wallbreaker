@@ -250,15 +250,15 @@ def test_v2_rejects_empty_and_recursive_workflows(tmp_path):
         assert recursive.status_code == 200
 
 
-def test_parallel_v2_and_legacy_shell_routes(tmp_path):
+def test_v2_only_shell_routes(tmp_path):
     web = tmp_path / "web"
     dist = web / "dist"
     dist.mkdir(parents=True)
     (dist / "index.html").write_text("<main>wallbreaker shell</main>", encoding="utf-8")
     with TestClient(create_app(config=None, sessions_dir=tmp_path / "sessions", web_dir=web)) as client:
         assert "wallbreaker shell" in client.get("/v2").text
-        assert "wallbreaker shell" in client.get("/legacy").text
         assert "wallbreaker shell" in client.get("/").text
+        assert client.get("/legacy").status_code == 404
 
 
 def test_dashboard_refuses_network_bind_without_explicit_acknowledgement():
