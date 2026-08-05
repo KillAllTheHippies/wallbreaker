@@ -324,7 +324,7 @@ export interface AgentEvent {
 }
 
 export async function runAgent(
-  body: { objective: string; max_rounds?: number; max_tokens?: number; concurrency?: number; request_delay_ms?: number; enabled_techniques?: string[] },
+  body: { objective: string; max_rounds?: number; max_tokens?: number; concurrency?: number; request_delay_ms?: number; jef_behavior?: string; enabled_techniques?: string[] },
   onEvent: (ev: AgentEvent) => void,
   signal?: AbortSignal
 ): Promise<void> {

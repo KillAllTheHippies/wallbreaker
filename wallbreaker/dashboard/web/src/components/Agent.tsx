@@ -11,6 +11,7 @@ import {
 import { AgentConfigDrawer, DEFAULT_AGENT_CONFIG, normalizeAgentConfig } from "./AgentConfigDrawer";
 import { ModelChooser } from "./ModelChooser";
 import { ProviderChooser } from "./ProviderChooser";
+import { JEFBehaviorPicker } from "../v2/JEFBehaviorPicker";
 
 type Item =
   | { kind: "text"; text: string }
@@ -40,6 +41,7 @@ function storedTechniques(): string[] | null {
 
 export function Agent({ hasTarget }: { hasTarget: boolean }) {
   const [objective, setObjective] = useState("");
+  const [jefBehavior, setJefBehavior] = useState("");
   const [agentConfig, setAgentConfig] = useState<AgentConfig>(DEFAULT_AGENT_CONFIG);
   const [techniques, setTechniques] = useState<Tool[]>([]);
   const [enabled, setEnabled] = useState<Set<string>>(new Set());
@@ -145,7 +147,7 @@ export function Agent({ hasTarget }: { hasTarget: boolean }) {
     runningRef.current = true;
     setItems([]); setErr(""); setRunLog(""); setPaused(false); setPauseReady(false); setRunning(true);
     try {
-      await runAgent({ objective, ...agentConfig, enabled_techniques: [...enabled] }, onEvent);
+      await runAgent({ objective, ...agentConfig, jef_behavior: jefBehavior || undefined, enabled_techniques: [...enabled] }, onEvent);
     } catch (e) {
       setErr((e as Error).message);
     } finally {
@@ -210,6 +212,7 @@ export function Agent({ hasTarget }: { hasTarget: boolean }) {
           onChange={(event) => setObjective(event.target.value)}
           disabled={running}
         />
+        <JEFBehaviorPicker value={jefBehavior} onChange={setJefBehavior} disabled={running} />
 
         <details className="technique-picker" open>
           <summary>
