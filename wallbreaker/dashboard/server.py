@@ -1632,8 +1632,8 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
             raise HTTPException(status_code=400, detail=f"unknown JEF behavior: {requested_behavior}")
         cumulative_jef = bool(body.get("cumulative_jef", True))
         jef_post_pass_mode = str(body.get("jef_post_pass_mode") or "stop_on_threshold").strip().lower()
-        if jef_post_pass_mode not in {"stop_on_threshold", "strengthen", "verify"}:
-            raise HTTPException(status_code=400, detail="jef_post_pass_mode must be stop_on_threshold, strengthen, or verify")
+        if jef_post_pass_mode not in {"stop_on_threshold", "strengthen"}:
+            raise HTTPException(status_code=400, detail="jef_post_pass_mode must be stop_on_threshold or strengthen")
         if agent_active:
             raise HTTPException(status_code=409, detail="an agent run is already in progress")
         if dashboard_inference_lock.locked():
@@ -1752,7 +1752,6 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
         registry.ctx.jef_behavior = jef_behavior["id"] if jef_behavior else ""
         registry.ctx.jef_cumulative = cumulative_jef
         registry.ctx.jef_post_pass_mode = jef_post_pass_mode
-        registry.ctx.jef_verification = jef_post_pass_mode == "verify"
         registry.ctx.current_objective = objective
         def record_verdict(payload, response, label, reason, technique) -> None:
             evaluations = registry.ctx.jef_evaluations

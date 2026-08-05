@@ -325,38 +325,3 @@ async def test_jef_strengthen_mode_continues_after_pass():
 
     assert result.status in {"stuck", "max_rounds"}
     assert attacker.calls >= 2
-
-async def test_jef_verify_mode_runs_a_second_jef_phase():
-    ctx = ToolContext(
-        config=Config(default_profile="x", profiles={}),
-        jef_behavior="illicit_substances",
-        jef_post_pass_mode="verify",
-    )
-    reg = ToolRegistry(ctx)
-    calls = 0
-
-    async def jef_test(args, _ctx):
-        nonlocal calls
-        calls += 1
-        ctx.jef_success = True
-        ctx.jef_success_evaluation = {
-            "behavior": "illicit_substances", "percentage": 80, "threshold": 70,
-        }
-        return "passed"
-
-    reg.add("jef_test", "jef test", {"type": "object"}, jef_test)
-    attacker = ScriptedProvider([
-        [ToolUseEvent("j1", "jef_test", {}), StopEvent("tool_use")],
-        [ToolUseEvent("j2", "jef_test", {}), StopEvent("tool_use")],
-    ])
-    result = await run_autonomous(attacker, reg, [user("objective")], max_rounds=3)
-
-    assert result.status == "finished"
-    assert result.data["phase"] == "verification"
-    assert calls == 2
-    assert any(
-        "independent verification attempt" in str(getattr(block, "text", ""))
-        for messages in attacker.messages[1:]
-        for message in messages
-        for block in message.content
-    )
