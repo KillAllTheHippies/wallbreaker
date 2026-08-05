@@ -65,3 +65,42 @@ def test_validate_rate(monkeypatch):
     validate.register(reg)
     res = asyncio.run(reg.execute("validate", {"task": "do X", "n": 8}))
     assert "8 samples" in res.content and "%" in res.content
+
+
+def test_validate_uses_jef_without_ordinary_judge(monkeypatch):
+    import wallbreaker.jef as jef_mod
+
+    ep = Endpoint("t", "openai", "http://x", "m")
+    cfg = Config(default_profile="t", profiles={"t": ep}, target=ep)
+    calls = {"target": 0, "jef": 0}
+
+    class FP:
+        def __init__(self, e, **k): pass
+
+        async def complete(self, m, system=None, max_tokens=300, temperature=1.0):
+            calls["target"] += 1
+            return "target output"
+
+    def fake_score(behavior, response):
+        calls["jef"] += 1
+        return {
+            "behavior": behavior, "status": "scored", "percentage": 80,
+            "threshold": 70, "score": 8, "missing": [],
+        }
+
+    async def unexpected_grade(*args, **kwargs):
+        raise AssertionError("ordinary judge must not run in JEF validate mode")
+
+    monkeypatch.setattr(factory, "build_provider", FP)
+    monkeypatch.setattr(jef_mod, "score_response", fake_score)
+    monkeypatch.setattr(judging, "grade", unexpected_grade)
+    reg = ToolRegistry(ToolContext(
+        config=cfg, judge_endpoint=None, jef_behavior="illicit_substances"
+    ))
+    validate.register(reg)
+    res = asyncio.run(reg.execute("validate", {"task": "do X", "n": 4}))
+
+    assert "JEF RELIABILITY" in res.content
+    assert "ordinary judge disabled" in res.content
+    assert "pass rate: 100%" in res.content
+    assert calls == {"target": 4, "jef": 4}
