@@ -40,6 +40,22 @@ def test_catalog_creates_missing_parent_directory(tmp_path):
     assert path.exists()
 
 
+def test_catalog_sync_uses_one_connection_for_large_catalog(tmp_path):
+    catalog = ModelCatalog(tmp_path / "models.sqlite3")
+    connections = 0
+    original_connect = catalog._connect
+
+    def counted_connect():
+        nonlocal connections
+        connections += 1
+        return original_connect()
+
+    catalog._connect = counted_connect
+    catalog.sync("featherless", [f"model-{index}" for index in range(1000)], "remote")
+    assert connections == 1
+    assert len(catalog.list("featherless")) == 1000
+
+
 @pytest.mark.asyncio
 async def test_successful_completion_learns_model(tmp_path):
     endpoint = Endpoint("ep", "openai", "https://example.test/v1", "live-model")

@@ -70,8 +70,33 @@ class ModelCatalog:
             """, (provider_id, model_id, source, now, now))
 
     def sync(self, provider_id: str, model_ids: list[str], source: str = "remote") -> None:
-        for model_id in model_ids:
-            self.upsert(provider_id, model_id, source)
+        provider_id = str(provider_id or "").strip()
+        if not provider_id:
+            return
+        if source not in _SOURCES:
+            source = "manual"
+        models = [str(model_id or "").strip() for model_id in model_ids]
+        models = [model_id for model_id in models if model_id]
+        if not models:
+            return
+        now = datetime.now(UTC).isoformat(timespec="seconds")
+        # A large provider such as Featherless can return thousands of models.
+        # Opening a fresh SQLite connection for every row needlessly consumes
+        # file descriptors and can fail with EMFILE during catalog refresh.
+        with self._connect() as db:
+            for model_id in models:
+                db.execute("""
+                    INSERT INTO models(provider_id, model_id, source, first_seen, last_seen, available)
+                    VALUES (?, ?, ?, ?, ?, 1)
+                    ON CONFLICT(provider_id, model_id) DO UPDATE SET
+                        source = CASE
+                            WHEN models.source = 'configured' THEN models.source
+                            WHEN excluded.source = 'inference' THEN excluded.source
+                            ELSE models.source
+                        END,
+                        last_seen = excluded.last_seen,
+                        available = 1
+                """, (provider_id, model_id, source, now, now))
 
     def list(self, provider_id: str) -> list[dict]:
         with self._connect() as db:
