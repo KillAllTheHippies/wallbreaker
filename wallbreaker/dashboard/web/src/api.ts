@@ -229,18 +229,24 @@ export interface FireResult extends ComposeResult {
 }
 
 async function j<T>(url: string, init?: RequestInit): Promise<T> {
-  const r = await fetch(url, init);
-  if (!r.ok) {
-    let detail = r.statusText;
-    try {
-      const body = await r.json();
-      detail = body.detail || detail;
-    } catch {
-      /* ignore */
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 30_000);
+  try {
+    const r = await fetch(url, { ...init, signal: init?.signal || controller.signal });
+    if (!r.ok) {
+      let detail = r.statusText;
+      try {
+        const body = await r.json();
+        detail = body.detail || detail;
+      } catch {
+        /* ignore */
+      }
+      throw new Error(detail);
     }
-    throw new Error(detail);
+    return r.json() as Promise<T>;
+  } finally {
+    window.clearTimeout(timeout);
   }
-  return r.json() as Promise<T>;
 }
 
 export const api = {

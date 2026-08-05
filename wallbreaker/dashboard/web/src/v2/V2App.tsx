@@ -52,9 +52,16 @@ export function V2App() {
   const [roles, setRoles] = useState<RoleAssignments | null>(null);
   const mainRef = useRef<HTMLElement | null>(null);
   const pendingExecutionFocus = useRef<ExecutionSummary | null>(null);
+  const executionsRequestInFlight = useRef(false);
   const scrollPositions = useRef<Partial<Record<V2Route, number>>>({});
 
   const refreshExecutions = useCallback(() => {
+    // Do not stack a new request behind a slow server response. This is
+    // especially important while a large provider catalog is being fetched,
+    // because the five-second refresh cadence must not become an unbounded
+    // connection queue.
+    if (executionsRequestInFlight.current) return;
+    executionsRequestInFlight.current = true;
     v2Api.executions().then((result) => {
       const pending = pendingExecutionFocus.current;
       setExecutions(mergeExecutionRefresh(result.data, pending));
@@ -62,7 +69,9 @@ export function V2App() {
       if (pending && result.data.some((item) => item.id === pending.id)) {
         pendingExecutionFocus.current = null;
       }
-    }).catch(() => setExecutions([]));
+    }).catch(() => setExecutions([])).finally(() => {
+      executionsRequestInFlight.current = false;
+    });
   }, []);
 
   const refreshRoles = useCallback(() => {

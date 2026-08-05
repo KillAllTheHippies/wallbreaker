@@ -1,6 +1,7 @@
 import asyncio
 import json
 import time
+from pathlib import Path
 
 import pytest
 
@@ -259,6 +260,16 @@ def test_v2_only_shell_routes(tmp_path):
         assert "wallbreaker shell" in client.get("/v2").text
         assert "wallbreaker shell" in client.get("/").text
         assert client.get("/legacy").status_code == 404
+
+
+def test_v2_dashboard_bounds_polling_and_fetch_lifetime():
+    root = Path(__file__).resolve().parents[1] / "wallbreaker" / "dashboard" / "web" / "src"
+    app_source = (root / "v2" / "V2App.tsx").read_text(encoding="utf-8")
+    api_source = (root / "api.ts").read_text(encoding="utf-8")
+    assert "executionsRequestInFlight" in app_source
+    assert ".finally(() =>" in app_source
+    assert "new AbortController()" in api_source
+    assert "30_000" in api_source
 
 
 def test_dashboard_refuses_network_bind_without_explicit_acknowledgement():
