@@ -237,6 +237,7 @@
 .v2-inspector-tabs button { min-width: 0; flex: 1 1 auto; padding: 0 6px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--v2-muted); font-size: 9px; }
 .v2-inspector-tabs button.active { border-bottom-color: var(--v2-red); color: var(--v2-text); }
 .v2-inspector-body { min-height: 0; flex: 1; overflow: auto; }
+.v2-inspector-body > .v2-code { height: 100%; max-height: none; box-sizing: border-box; }
 .v2-inspector-summary { padding: 13px; }
 .v2-inspector-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding-bottom: 13px; }
 .v2-inspector-heading span { color: var(--v2-muted); font-size: 9px; }
@@ -806,6 +807,8 @@
 .v2-loop-event-detail > p { max-height: 240px; margin: 0; overflow: auto; color: #d2cbc8; font: 10px/1.6 var(--v2-mono); white-space: pre-wrap; overflow-wrap: anywhere; }
 .v2-loop-event-detail > span, .v2-loop-event-detail > details > summary { color: var(--v2-muted); font: 8px var(--v2-mono); }
 .v2-loop-event-detail .v2-code { max-height: 220px; }
+.v2-loop-tool-call { display: grid; gap: 7px; }
+.v2-loop-tool-call > strong { color: var(--v2-text); font: 10px var(--v2-mono); }
 
 .v2-agent > .v2-steer { min-height: 102px; padding-block: 7px 8px; }
 .v2-agent > .v2-steer .v2-steer-row textarea { min-height: 42px; }

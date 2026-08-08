@@ -417,21 +417,6 @@ def _finding_run_summaries(sessions: Path) -> list[dict]:
     return out
 
 
-def _summarize_args(args: dict) -> str:
-    if not isinstance(args, dict):
-        return str(args)[:300]
-    if not args:
-        return ""
-    parts = []
-    for k, v in args.items():
-        if k in ("prompt", "request", "text", "payload") and isinstance(v, str):
-            parts.append(f"{k}({len(v)} chars): {v[:160]}")
-        else:
-            vs = v if isinstance(v, str) else json.dumps(v, ensure_ascii=False)
-            parts.append(f"{k}={str(vs)[:120]}")
-    return "  ".join(parts)[:600]
-
-
 def _web_dist(web_dir: str | Path | None) -> Path | None:
     base = Path(web_dir) if web_dir else Path(__file__).resolve().parent / "web"
     dist = base / "dist"
@@ -1243,6 +1228,7 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
     dashboard_inference_lock = asyncio.Lock()
     agent_active = False
     agent_control = None
+    completed_agent_histories: dict[str, list] = {}
 
     @app.post("/api/v2/compose")
     def compose(body: dict):
@@ -1552,8 +1538,12 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
         })
         return _agent_status_view()
 
-    @app.post("/api/v2/agent/run")
-    async def agent_run(body: dict):
+    async def _agent_run(
+        body: dict,
+        *,
+        history_seed: list | None = None,
+        continuation_of: str = "",
+    ):
         nonlocal agent_active, agent_control
         from fastapi.responses import StreamingResponse
 
@@ -1643,6 +1633,7 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
                 "jef_behavior": jef_behavior["id"] if jef_behavior else "",
                 "cumulative_jef": cumulative_jef,
                 "jef_post_pass_mode": jef_post_pass_mode,
+                "continuation_of": continuation_of,
             },
         )
         queue: asyncio.Queue = asyncio.Queue()
@@ -1663,7 +1654,7 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
 
         def tool_start(tool_id, name, args) -> None:
             runlog.event("tool_call", tool_use_id=tool_id, tool=name, args=args)
-            push({"type": "tool_start", "name": name, "args": _summarize_args(args)})
+            push({"type": "tool_start", "name": name, "args": args})
 
         def tool_result(tool_id, name, content, is_error) -> None:
             runlog.event(
@@ -1674,7 +1665,7 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
                 error=bool(is_error),
             )
             push({
-                "type": "tool_result", "name": name, "content": (content or "")[:6000],
+                "type": "tool_result", "name": name, "content": content or "",
                 "error": bool(is_error), "verdict": _extract_verdict(content or ""),
             })
 
@@ -1730,9 +1721,14 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
             on_usage=lambda i, o: push({"type": "usage", "input": i, "output": o}),
         )
 
-        history = [user(objective)]
+        history = list(history_seed) if history_seed else [user(objective)]
+        if continuation_of:
+            history.append(user(
+                "[Operator continuation]\n"
+                + str(body.get("continuation_message") or "").strip()
+            ))
         runlog.event(
-            "objective", text=objective,
+            "objective", text=objective, continuation_of=continuation_of,
             jef_behavior=jef_behavior["id"] if jef_behavior else "",
         )
 
@@ -1755,6 +1751,8 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
             "push": push,
             "objective": objective,
             "jef_behavior": jef_behavior["id"] if jef_behavior else "",
+            "history": history,
+            "continuation_of": continuation_of,
         }
 
         def mark_pause_ready() -> None:
@@ -1796,6 +1794,19 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
                 except Exception as exc:  # noqa: BLE001
                     error_event(f"{type(exc).__name__}: {exc}")
                 finally:
+                    from ..session import save_session
+
+                    session_path = sessions / f"{runlog.path.stem}.agent-session.json"
+                    save_session(
+                        session_path,
+                        history,
+                        meta={
+                            "source": "dashboard_agent",
+                            "run_log": runlog.path.name,
+                            "continuation_of": continuation_of,
+                        },
+                    )
+                    completed_agent_histories[runlog.path.name] = list(history)
                     agent_active = False
                     resume_event.set()
                     agent_control = None
@@ -1831,6 +1842,10 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
                 stream_attached = False
 
         return StreamingResponse(gen(), media_type="text/event-stream", headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+    @app.post("/api/v2/agent/run")
+    async def agent_run(body: dict):
+        return await _agent_run(body)
 
     def _execution_or_404(execution_id: str):
         execution = execution_manager.get(execution_id)
@@ -2011,8 +2026,18 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
             "message": "This capability is available through its stateful V2 workspace.",
         }
 
-    async def _agent_execution(ctx, args: dict):
-        response = await agent_run(args)
+    async def _agent_execution(
+        ctx,
+        args: dict,
+        *,
+        history_seed: list | None = None,
+        continuation_of: str = "",
+    ):
+        response = await _agent_run(
+            args,
+            history_seed=history_seed,
+            continuation_of=continuation_of,
+        )
         if agent_control is not None:
             agent_control["execution_id"] = ctx.execution.id
         buffer = ""
@@ -2043,6 +2068,7 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
                         "max_rounds": event.get("max_rounds", 0),
                         "max_tokens": event.get("max_tokens", 0),
                         "jef_behavior": event.get("jef_behavior", ""),
+                        "continuation_of": continuation_of,
                     })
                 elif event_type == "round":
                     ctx.execution.metadata["current_round"] = event.get("round", 0)
@@ -2264,17 +2290,50 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
     @app.post("/api/v2/executions/{execution_id}/steer")
     async def execution_steer(execution_id: str, body: dict):
         execution = _execution_or_404(execution_id)
-        message = str(body.get("message") or "")
+        message = str(body.get("message") or "").strip()
+        if not message:
+            raise HTTPException(status_code=400, detail="steering message is required")
         if (
             execution.capability_id == "agent.run" and agent_control is not None
             and agent_control.get("execution_id") == execution_id
         ):
             await agent_steer({"message": message})
+        elif execution.capability_id == "agent.run" and execution.status in TERMINAL_STATES:
+            history = completed_agent_histories.get(execution.run_id)
+            if history is None and execution.run_id:
+                session_path = sessions / f"{Path(execution.run_id).stem}.agent-session.json"
+                if session_path.is_file():
+                    from ..session import load_session
+
+                    history, _ = load_session(session_path)
+            if not history:
+                raise HTTPException(
+                    status_code=409,
+                    detail="the retained agent conversation is unavailable for this completed run",
+                )
+            continuation_args = dict(execution.args)
+            continuation_args["continuation_message"] = message
+            continuation = execution_manager.create(
+                "agent.run",
+                continuation_args,
+                lambda ctx: _agent_execution(
+                    ctx,
+                    continuation_args,
+                    history_seed=history,
+                    continuation_of=execution.run_id,
+                ),
+                mode="interactive",
+            )
+            continuation.metadata.update({
+                "title": str(execution.metadata.get("title") or execution.args.get("objective") or execution.capability_id),
+                "continuation_of": execution.run_id,
+            })
+            return {"ok": True, "continued": True, "execution": continuation.as_dict()}
         try:
             execution_manager.steer(execution_id, message)
         except (RuntimeError, ValueError) as exc:
             raise HTTPException(status_code=409 if isinstance(exc, RuntimeError) else 400, detail=str(exc)) from exc
-        return execution.as_dict()
+        return {"ok": True, "execution": execution.as_dict()}
 
     @app.post("/api/v2/executions/{execution_id}/attacker")
     async def execution_attacker_switch(execution_id: str, body: dict):

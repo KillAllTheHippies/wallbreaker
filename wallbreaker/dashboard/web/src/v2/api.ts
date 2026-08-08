@@ -93,7 +93,11 @@ function normalizeExecution(value: unknown, source: "v2" | "history" = "v2"): Ex
 
 function normalizeEvent(value: unknown, executionId: string, index: number): EventEnvelope {
   const row = object(value);
-  const data = object(row.data);
+  const nestedData = object(row.data);
+  // Live execution events use a `data` envelope; retained JSONL events keep
+  // their meaningful fields at the top level. Preserve both shapes so the
+  // inspector can render complete historical evidence (not just its kind).
+  const data = Object.keys(nestedData).length ? nestedData : row;
   const request = object(row.request);
   const endpoint = object(request.endpoint);
   const kind = text(row.kind || row.type || row.event || "system").toLowerCase();
@@ -217,7 +221,13 @@ export const v2Api = {
   switchAttacker: (execution: ExecutionSummary, body: { provider?: string; model?: string; profile?: string }) =>
     request<ExecutionSummary>(`/api/v2/executions/${encodeURIComponent(execution.id)}/attacker`, json(body)).then((value) => normalizeExecution(value)),
 
-  steer: async (execution: ExecutionSummary, message: string) => request<{ ok: boolean }>(`/api/v2/executions/${encodeURIComponent(execution.id)}/steer`, json({ message })),
+  steer: async (execution: ExecutionSummary, message: string) => {
+    const result = await request<{ ok: boolean; continued?: boolean; execution?: unknown }>(`/api/v2/executions/${encodeURIComponent(execution.id)}/steer`, json({ message }));
+    return {
+      ...result,
+      execution: result.execution ? normalizeExecution(result.execution) : undefined,
+    };
+  },
 
   compose: (body: ComposePayload) => request<ComposeResult>("/api/v2/compose", json(body)),
   fire: (body: ComposePayload & { source?: string }) => request<ComposeResult>("/api/v2/fire", json(body)),

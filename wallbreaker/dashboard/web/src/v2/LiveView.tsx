@@ -136,6 +136,13 @@ function eventStatus(event: EventEnvelope): "pass" | "fail" | "bypass" | "inconc
 }
 
 function eventTitle(event: EventEnvelope): string {
+  if (isJEFEvent(event)) {
+    const title = String(valueAt(event, "title") || valueAt(event, "behavior") || "JEF test");
+    const percentage = valueAt(event, "percentage");
+    const threshold = valueAt(event, "threshold");
+    if (percentage != null && threshold != null) return `${title} · ${percentage}% / ${threshold}%`;
+    return title;
+  }
   return event.summary || event.text || event.kind.replace(/_/g, " ");
 }
 
@@ -176,6 +183,18 @@ function Inspector({ event }: { event: EventEnvelope | null }) {
   const [tab, setTab] = useState<InspectorTab>("overview");
 
   if (!event) return <aside className="v2-inspector"><EmptyState title="Select an event" detail="Matrix cells and timeline rows open synchronized evidence here." /></aside>;
+  const jef = jefEvaluation(event);
+  const jefMetadata = jef ? {
+    behavior: jef.behavior,
+    title: jef.title,
+    status: jef.status,
+    passed: jef.passed ?? jef.triggered ?? false,
+    triggered: jef.triggered ?? false,
+    conversation_id: jef.conversation_id,
+    output_id: jef.output_id,
+    output_ids: jef.output_ids,
+    output_count: jef.output_count,
+  } : {};
   const content = (() => {
     if (tab === "raw") return <JsonBlock value={event.raw ?? event} />;
     if (tab === "conversation") return <Conversation value={valueAt(event, "conversation") || valueAt(event, "messages")} />;
@@ -189,6 +208,7 @@ function Inspector({ event }: { event: EventEnvelope | null }) {
       return <JsonBlock value={Object.fromEntries(Object.entries(payload).filter(([, value]) => hasValue(value)))} empty="No request, response, or artifact payload was recorded." />;
     }
     if (tab === "evaluation") {
+      if (jef) return <div className="v2-inspector-summary"><JEFResult evaluation={jef} /><div className="v2-inspector-section"><h4>JEF metadata</h4><JsonBlock value={jefMetadata} /></div></div>;
       const evaluation = {
         verdict: event.verdict,
         evidence: valueAt(event, "evidence") || valueAt(event, "key_evidence"),
@@ -210,7 +230,7 @@ function Inspector({ event }: { event: EventEnvelope | null }) {
           <div><dt>Latency</dt><dd>{formatDuration(event.latency_ms)}</dd></div>
           <div><dt>Tokens in / out</dt><dd>{formatTokens(event.input_tokens, event.output_tokens)}</dd></div>
         </dl>
-        <div className="v2-inspector-section"><h4>Content</h4><JsonBlock value={event.text || event.summary} empty="No text content recorded." /></div>
+        {jef ? <><JEFResult evaluation={jef} /><div className="v2-inspector-section"><h4>JEF metadata</h4><JsonBlock value={jefMetadata} /></div></> : <div className="v2-inspector-section"><h4>Content</h4><JsonBlock value={event.text || event.summary} empty="No text content recorded." /></div>}
         {event.verdict && <div className="v2-inspector-section"><h4>Verdict</h4><VerdictBadge verdict={event.verdict} /></div>}
       </div>
     );
@@ -534,7 +554,7 @@ function RunLauncher({ execution, onRefresh, onStarted }: { execution: Execution
   </details>;
 }
 
-function SteeringBar({ execution }: { execution: ExecutionSummary | null }) {
+function SteeringBar({ execution, onContinued }: { execution: ExecutionSummary | null; onContinued: (execution: ExecutionSummary) => void }) {
   const [message, setMessage] = useState("");
   const [status, setStatus] = useState("");
   const [sending, setSending] = useState(false);
@@ -543,35 +563,83 @@ function SteeringBar({ execution }: { execution: ExecutionSummary | null }) {
     setSending(true);
     setStatus("");
     try {
-      await v2Api.steer(execution, message.trim());
+      const result = await v2Api.steer(execution, message.trim());
       setMessage("");
-      setStatus("Steering queued for the next safe boundary.");
+      if (result.execution && result.continued) {
+        onContinued(result.execution);
+        setStatus("Continuation started with your steering message.");
+      } else {
+        setStatus("Steering queued for the next safe boundary.");
+      }
     } catch (reason) {
       setStatus(reason instanceof Error ? reason.message : "Unable to queue steering");
     } finally { setSending(false); }
   };
   return (
     <section className="v2-steer" aria-label="Steer the attacker">
-      <div className="v2-steer-head"><strong>Steer the attacker</strong><span>{execution?.current_round ? `Round ${execution.current_round}` : execution ? "Waiting for the first round" : "Available when the loop starts"}</span>{status && <span role="status">{status}</span>}</div>
+      <div className="v2-steer-head"><strong>Steer the attacker</strong><span>{execution?.status === "succeeded" ? "Continue this completed engagement" : execution?.current_round ? `Round ${execution.current_round}` : execution ? "Waiting for the first round" : "Available when the loop starts"}</span>{status && <span role="status">{status}</span>}</div>
       <div className="v2-steer-row">
         <label><span className="v2-sr-only">Steering message</span><textarea value={message} onChange={(event) => setMessage(event.target.value)} onKeyDown={(event) => {
           if ((event.ctrlKey || event.metaKey) && event.key === "Enter") { event.preventDefault(); submit(); }
-        }} placeholder={execution ? "Steer or command the attacker. Ctrl Enter sends." : "Draft steering guidance here; it can be sent after the loop starts."} /></label>
+        }} placeholder={execution?.status === "succeeded" ? "Continue this engagement with a new instruction. Ctrl Enter sends." : execution ? "Steer or command the attacker. Ctrl Enter sends." : "Draft steering guidance here; it can be sent after the loop starts."} /></label>
         <button type="button" className="v2-button v2-button-primary" disabled={!execution || !message.trim() || sending} onClick={submit}>{sending ? "Sending" : "Send"}</button>
       </div>
     </section>
   );
 }
 
-const LOOP_KINDS = new Set(["start", "round", "message", "tool_call", "tool_result", "result", "verdict", "judge_verdict", "jef_test", "feedback", "operator", "error", "control", "done"]);
+const LOOP_KINDS = new Set(["start", "round", "message", "tool_call", "tool_result", "result", "verdict", "judge_verdict", "jef_test", "jef_validate", "feedback", "operator", "error", "control", "done"]);
+
+function isJEFEvent(event: EventEnvelope): boolean {
+  return ["jef_test", "jef_validate"].includes(event.kind)
+    || String(event.data?.evaluator || "").toLowerCase() === "jef";
+}
+
+function strings(value: unknown, samples?: number): string[] {
+  if (Array.isArray(value)) return value.map(String);
+  if (!value || typeof value !== "object") return [];
+  return Object.entries(value as Record<string, unknown>)
+    .filter(([, count]) => Number(count) > 0)
+    .map(([criterion, count]) => samples ? `${criterion} (${count}/${samples})` : criterion);
+}
+
+function numberValue(value: unknown): number | undefined {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
 
 function jefEvaluation(event: EventEnvelope): JEFEvaluation | null {
-  const candidate = event.kind === "jef_test" ? event.data : event.data?.evaluation;
+  const candidate = isJEFEvent(event) ? event.data : event.data?.evaluation;
   if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) return null;
-  const evaluation = candidate as Partial<JEFEvaluation>;
-  return typeof evaluation.behavior === "string" && typeof evaluation.status === "string"
-    ? evaluation as JEFEvaluation
-    : null;
+  const evaluation = candidate as Record<string, unknown>;
+  if (typeof evaluation.behavior !== "string") return null;
+  const samples = numberValue(evaluation.samples);
+  const percentages = Array.isArray(evaluation.percentages)
+    ? evaluation.percentages.map(numberValue).filter((value): value is number => value !== undefined)
+    : [];
+  const percentage = numberValue(evaluation.percentage)
+    ?? (percentages.length ? percentages.reduce((total, value) => total + value, 0) / percentages.length : undefined)
+    ?? ((numberValue(evaluation.pass_rate) ?? 0) * 100);
+  const passedValue = evaluation.passed;
+  const passed = typeof passedValue === "boolean" ? passedValue : Number(passedValue || 0) > 0;
+  return {
+    behavior: evaluation.behavior,
+    title: typeof evaluation.title === "string" ? evaluation.title : undefined,
+    threshold: numberValue(evaluation.threshold) ?? 0,
+    score: numberValue(evaluation.score) ?? numberValue(evaluation.pass_rate),
+    percentage,
+    triggered: Boolean(evaluation.triggered),
+    passed,
+    total_possible_score: numberValue(evaluation.total_possible_score),
+    matches: strings(evaluation.matches, samples),
+    missing: strings(evaluation.missing, samples),
+    conversation_id: numberValue(evaluation.conversation_id),
+    output_id: numberValue(evaluation.output_id),
+    output_ids: Array.isArray(evaluation.output_ids) ? evaluation.output_ids.map(numberValue).filter((value): value is number => value !== undefined) : undefined,
+    output_count: numberValue(evaluation.output_count),
+    status: evaluation.status === "unavailable" ? "unavailable" : "scored",
+    error: typeof evaluation.error === "string" ? evaluation.error : undefined,
+  };
 }
 
 function AgentLoop({ execution, events, streamState, configuredRoles }: { execution: ExecutionSummary | null; events: EventEnvelope[]; streamState: string; configuredRoles?: RoleAssignments | null }) {
@@ -612,7 +680,8 @@ function AgentLoop({ execution, events, streamState, configuredRoles }: { execut
         const copy = event.text || eventTitle(event);
         const compactKind = ["start", "round", "lifecycle", "run_meta"].includes(event.kind.toLowerCase());
         const transcript = event.text?.trim() || "";
-        const evaluation = event.kind === "jef_test" ? jefEvaluation(event) : null;
+        const evaluation = jefEvaluation(event);
+        const toolArgs = event.kind === "tool_call" ? event.data?.args ?? event.data?.arguments : undefined;
         return <li key={event.id} className={`v2-loop-event v2-loop-event-${actor.toLowerCase()}`}>
           <div className="v2-loop-event-summary">
             <span className="v2-loop-event-marker" aria-hidden="true">●</span>
@@ -621,7 +690,7 @@ function AgentLoop({ execution, events, streamState, configuredRoles }: { execut
             {event.verdict ? <VerdictBadge verdict={event.verdict} /> : <span className="v2-loop-event-time">{formatTime(event.timestamp)}</span>}
           </div>
           {!compactKind && <div className="v2-loop-event-detail">
-            {evaluation ? <JEFResult evaluation={evaluation} /> : transcript ? <p>{transcript}</p> : <p>{copy}</p>}
+            {evaluation ? <JEFResult evaluation={evaluation} /> : event.kind === "tool_call" ? <div className="v2-loop-tool-call"><strong>{eventTitle(event)}</strong>{hasValue(toolArgs) && <JsonBlock value={toolArgs} empty="This tool call has no arguments." />}</div> : transcript ? <p>{transcript}</p> : <p>{copy}</p>}
             <span>{eventMeta(event) || `Event #${event.sequence}`}</span>
             {hasValue(event.data) && <details><summary>Raw event data</summary><JsonBlock value={event.data} /></details>}
           </div>}
@@ -637,7 +706,7 @@ export function AgentView({ execution, enabled = true, onRefresh, onStarted, con
     <RunStrip execution={execution} onRefresh={onRefresh} />
     <RunLauncher execution={execution} onRefresh={onRefresh} onStarted={onStarted} />
     <AgentLoop execution={execution} events={events} streamState={streamState} configuredRoles={configuredRoles} />
-    <SteeringBar execution={execution} />
+    <SteeringBar execution={execution} onContinued={onStarted} />
   </div>;
 }
 

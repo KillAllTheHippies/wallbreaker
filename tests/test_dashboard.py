@@ -312,6 +312,8 @@ def test_agent_run_logs_full_scaffold_inference_and_tools(monkeypatch, tmp_path)
         assert response.status_code == 200
         stream_text = "".join(response.iter_text())
     assert '"type": "done"' in stream_text
+    assert '"args": {"summary": "complete summary text"}' in stream_text
+    assert '"content": "finish accepted: complete summary text"' in stream_text
 
     log = next(sessions.glob("run-*.jsonl"))
     records = [json.loads(line) for line in log.read_text(encoding="utf-8").splitlines()]
