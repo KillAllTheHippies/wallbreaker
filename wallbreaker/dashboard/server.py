@@ -1215,7 +1215,7 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
         except Exception:
             return []
 
-    @app.get("/api/v2/jef/behaviors")
+    @app.get("/api/jef/behaviors")
     def jef_behaviors():
         """Expose JEF behavior labels only; benchmark prompts stay out of the UI."""
         from ..jef import JEFUnavailable, behaviors, jef_version
@@ -1230,7 +1230,7 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
     agent_control = None
     completed_agent_histories: dict[str, list] = {}
 
-    @app.post("/api/v2/compose")
+    @app.post("/api/compose")
     def compose(body: dict):
         from ..jef import JEFUnavailable
 
@@ -1262,11 +1262,11 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
                 fresh.path = sessions / f"run-{stamp.strftime('%Y%m%d-%H%M%S')}.jsonl"
         return fresh
 
-    @app.get("/api/v2/console/conversation")
+    @app.get("/api/console/conversation")
     def console_conversation_get():
         return _console_conversation_view()
 
-    @app.post("/api/v2/console/conversation/reset")
+    @app.post("/api/console/conversation/reset")
     async def console_conversation_reset():
         if dashboard_inference_lock.locked():
             raise HTTPException(status_code=409, detail="wait for the current turn to finish before resetting")
@@ -1293,7 +1293,7 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
             **_console_conversation_view(),
         }
 
-    @app.post("/api/v2/fire")
+    @app.post("/api/fire")
     async def fire(body: dict):
         if config is None:
             raise HTTPException(status_code=400, detail="no [target] configured in config.toml")
@@ -1456,7 +1456,7 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
             "objective": str(agent_control.get("objective") or ""),
         }
 
-    @app.get("/api/v2/agent/status")
+    @app.get("/api/agent/status")
     async def agent_status():
         return _agent_status_view()
 
@@ -1465,7 +1465,7 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
             raise HTTPException(status_code=409, detail="no agent run is active")
         return agent_control
 
-    @app.post("/api/v2/agent/steer")
+    @app.post("/api/agent/steer")
     async def agent_steer(body: dict):
         control = _active_control()
         message = str(body.get("message") or "").strip()
@@ -1476,7 +1476,7 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
         control["push"]({"type": "steer_queued", "text": message})
         return {"ok": True, "queued": len(control["feedback"])}
 
-    @app.post("/api/v2/agent/pause")
+    @app.post("/api/agent/pause")
     async def agent_pause():
         control = _active_control()
         control["paused"] = True
@@ -1489,7 +1489,7 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
         })
         return _agent_status_view()
 
-    @app.post("/api/v2/agent/resume")
+    @app.post("/api/agent/resume")
     async def agent_resume():
         control = _active_control()
         control["paused"] = False
@@ -1499,7 +1499,7 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
         control["push"]({"type": "control", "state": "running", "message": "Run resumed."})
         return _agent_status_view()
 
-    @app.post("/api/v2/agent/attacker")
+    @app.post("/api/agent/attacker")
     async def agent_attacker_switch(body: dict):
         control = _active_control()
         if not control.get("pause_ready"):
@@ -1843,7 +1843,7 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
 
         return StreamingResponse(gen(), media_type="text/event-stream", headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
-    @app.post("/api/v2/agent/run")
+    @app.post("/api/agent/run")
     async def agent_run(body: dict):
         return await _agent_run(body)
 
@@ -1871,7 +1871,7 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
             raise ValueError(f"unknown tool capability '{tool_name}'")
         runlog = RunLog(directory=str(sessions))
         runlog.set_run_meta(
-            source="dashboard_v2_capability",
+            source="dashboard_capability",
             capability_id=capability_id,
             models=run_models_meta(run_config, attacker=run_config.profile()),
             agent_roles=role_meta,
@@ -1915,7 +1915,7 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
 
         High-frequency commands delegate to the same registered tools used by
         the TUI. Read-only/operator-state commands return their canonical data
-        so V2 can render it in a tailored surface without importing Textual.
+        so dashboard can render it in a tailored surface without importing Textual.
         """
         from ..capabilities import TUI_SOURCE, lookup_capability
 
@@ -2023,7 +2023,7 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
         return {
             "kind": "tailored_surface", "capability_id": capability_id,
             "route": route_by_category.get(capability.category, "workflows"),
-            "message": "This capability is available through its stateful V2 workspace.",
+            "message": "This capability is available through its stateful dashboard workspace.",
         }
 
     async def _agent_execution(
@@ -2161,7 +2161,7 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
                     ) from exc
         return {"alias": alias, "steps": results}
 
-    @app.get("/api/v2/capabilities")
+    @app.get("/api/capabilities")
     def capabilities_get():
         try:
             from ..capabilities import merge_tool_capabilities, serialize_capabilities
@@ -2188,7 +2188,7 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
                 for name in build_registry(config).names()
             ]
 
-    @app.post("/api/v2/executions")
+    @app.post("/api/executions")
     async def execution_create(body: dict):
         capability_id = str(body.get("capability_id") or "").strip()
         if not capability_id:
@@ -2214,15 +2214,15 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         return execution.as_dict()
 
-    @app.get("/api/v2/executions")
+    @app.get("/api/executions")
     def executions_get(status: str | None = None, limit: int = 100):
         return execution_manager.list(status=status, limit=limit)
 
-    @app.get("/api/v2/executions/{execution_id}")
+    @app.get("/api/executions/{execution_id}")
     def execution_get(execution_id: str):
         return _execution_or_404(execution_id).as_dict()
 
-    @app.get("/api/v2/executions/{execution_id}/events")
+    @app.get("/api/executions/{execution_id}/events")
     async def execution_events(
         execution_id: str, after: int = 0, stream: bool = True,
     ):
@@ -2259,7 +2259,7 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
         )
 
-    @app.post("/api/v2/executions/{execution_id}/pause")
+    @app.post("/api/executions/{execution_id}/pause")
     async def execution_pause(execution_id: str):
         execution = _execution_or_404(execution_id)
         if (
@@ -2273,7 +2273,7 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
             raise HTTPException(status_code=409, detail=str(exc)) from exc
         return execution.as_dict()
 
-    @app.post("/api/v2/executions/{execution_id}/resume")
+    @app.post("/api/executions/{execution_id}/resume")
     async def execution_resume(execution_id: str):
         execution = _execution_or_404(execution_id)
         if (
@@ -2287,7 +2287,7 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
             raise HTTPException(status_code=409, detail=str(exc)) from exc
         return execution.as_dict()
 
-    @app.post("/api/v2/executions/{execution_id}/steer")
+    @app.post("/api/executions/{execution_id}/steer")
     async def execution_steer(execution_id: str, body: dict):
         execution = _execution_or_404(execution_id)
         message = str(body.get("message") or "").strip()
@@ -2335,7 +2335,7 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
             raise HTTPException(status_code=409 if isinstance(exc, RuntimeError) else 400, detail=str(exc)) from exc
         return {"ok": True, "execution": execution.as_dict()}
 
-    @app.post("/api/v2/executions/{execution_id}/attacker")
+    @app.post("/api/executions/{execution_id}/attacker")
     async def execution_attacker_switch(execution_id: str, body: dict):
         execution = _execution_or_404(execution_id)
         if execution.capability_id != "agent.run":
@@ -2351,7 +2351,7 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
         )
         return execution.as_dict()
 
-    @app.post("/api/v2/executions/{execution_id}/cancel")
+    @app.post("/api/executions/{execution_id}/cancel")
     async def execution_cancel(execution_id: str):
         execution = _execution_or_404(execution_id)
         if (
@@ -2367,15 +2367,15 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
             raise HTTPException(status_code=409, detail=str(exc)) from exc
         return execution.as_dict()
 
-    @app.get("/api/v2/history/status")
+    @app.get("/api/history/status")
     async def history_status():
         return history_index.status()
 
-    @app.get("/api/v2/bookmarks")
+    @app.get("/api/bookmarks")
     async def bookmarks():
         return {"items": _load_bookmarks(sessions)}
 
-    @app.post("/api/v2/bookmarks/toggle")
+    @app.post("/api/bookmarks/toggle")
     async def toggle_bookmark(body: dict):
         kind = str(body.get("kind") or "").strip().lower()
         key = str(body.get("key") or "").strip()
@@ -2401,16 +2401,16 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
         _save_bookmarks(sessions, items)
         return {"bookmarked": True, "item": item, "items": items}
 
-    @app.post("/api/v2/history/rebuild")
+    @app.post("/api/history/rebuild")
     async def history_rebuild():
         return history_index.rebuild(sessions)
 
-    @app.get("/api/v2/history/runs")
+    @app.get("/api/history/runs")
     async def history_runs(limit: int = 50, offset: int = 0):
         history_index.update(sessions)
         return history_index.run_summaries(limit=limit, offset=offset)
 
-    @app.get("/api/v2/history/events")
+    @app.get("/api/history/events")
     async def history_events(
         q: str = "", run_name: str | None = None, event_type: str | None = None,
         actor: str | None = None, technique: str | None = None,
@@ -2429,7 +2429,7 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
             limit=limit, offset=offset, order=order,
         )
 
-    @app.get("/api/v2/reports/{run_name}")
+    @app.get("/api/reports/{run_name}")
     async def run_report(run_name: str):
         path = _safe_run_path(sessions, run_name)
         if path is None or not path.exists():
@@ -2442,6 +2442,14 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
             "export": report_mod.build_findings_export(path),
             "markdown": report_mod.build_report(path),
         }
+
+    @app.api_route(
+        "/api/{unknown_path:path}",
+        methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"],
+    )
+    async def unknown_api_route(unknown_path: str):
+        """Keep unknown API requests out of the static application mount."""
+        raise HTTPException(status_code=404, detail="API endpoint not found")
 
     @app.on_event("shutdown")
     def close_history_index():
@@ -2456,7 +2464,7 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
             return {
                 "message": "Wallbreaker dashboard API is running, but the web UI is not built.",
                 "build": "cd wallbreaker/dashboard/web && npm install && npm run build",
-                "api": "/api/v2/capabilities",
+                "api": "/api/capabilities",
             }
 
     return app

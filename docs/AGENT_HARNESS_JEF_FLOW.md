@@ -1,6 +1,6 @@
 # Agent, Harness, and JEF execution flow
 
-This document describes how a V2 Agent run moves through Wallbreaker, the
+This document describes how an Agent run initiated from the dashboard moves through Wallbreaker, the
 configured target, and the JEF evaluator. For JEF-enabled runs, JEF is the
 authoritative success signal and its feedback is returned to the attacker.
 
@@ -169,7 +169,7 @@ the attacker is sent back to the JEF-guided loop.
 
 ## 8. Persistence and operator visibility
 
-Events are written to canonical JSONL history and indexed for V2 browsing.
+Events are written to canonical JSONL history and indexed for dashboard browsing.
 Records include stable execution/output correlations, timestamps, actor,
 round, event type, model-role metadata, tokens, latency, verdict, JEF data,
 and artifact references where available.
@@ -208,7 +208,7 @@ has correctly retained the run for further evidence or operator action.
 
 ## Current implementation state
 
-The current V2 implementation has moved JEF beyond a display-only selector:
+The current dashboard implementation has moved JEF beyond a display-only selector:
 
 - JEF behavior selection is validated against the installed registry before a
   run is created.
@@ -238,7 +238,7 @@ attacker plan
   → next attack or threshold-qualified completion
 ```
 
-## Configuration precedence in the current V2 surface
+## Configuration precedence in the current dashboard surface
 
 JEF behavior selection and model selection are separate concerns:
 

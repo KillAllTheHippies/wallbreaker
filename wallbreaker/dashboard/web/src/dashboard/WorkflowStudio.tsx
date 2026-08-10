@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
-import { v2Api } from "./api";
+import { api } from "../api";
 import { EmptyState, ErrorBanner, LoadingState, Panel } from "./components";
 import type { Capability, CapabilityProperty, ExecutionSummary, HistoryEvent } from "./types";
 import { ArsenalBrowser } from "../components/Arsenal";
 
-const WORKFLOW_KEY = "wallbreaker.v2.workflows";
-const DRAFT_KEY = "wallbreaker.v2.workflow-draft";
+const WORKFLOW_KEY = "wallbreaker.dashboard.workflows";
+const DRAFT_KEY = "wallbreaker.dashboard.workflow-draft";
 
 interface WorkflowStep {
   id: string;
@@ -64,13 +64,13 @@ function StepField({ name, property, value, onChange }: {
   onChange: (value: unknown) => void;
 }) {
   const label = property.title || name.replace(/_/g, " ");
-  if (property.type === "boolean") return <label className="v2-checkbox-field"><input type="checkbox" checked={Boolean(value)} onChange={(event) => onChange(event.target.checked)} /><span>{label}</span></label>;
-  if (property.enum) return <label className="v2-field"><span>{label}</span><select value={String(value ?? "")} onChange={(event) => onChange(event.target.value)}><option value="">Select</option>{property.enum.map((item) => <option key={String(item)}>{String(item)}</option>)}</select>{property.description && <small>{property.description}</small>}</label>;
-  if (property.type === "array" || property.type === "object") return <label className="v2-field v2-field-wide"><span>{label}</span><textarea value={value == null ? "" : JSON.stringify(value, null, 2)} onChange={(event) => {
+  if (property.type === "boolean") return <label className="dashboard-checkbox-field"><input type="checkbox" checked={Boolean(value)} onChange={(event) => onChange(event.target.checked)} /><span>{label}</span></label>;
+  if (property.enum) return <label className="dashboard-field"><span>{label}</span><select value={String(value ?? "")} onChange={(event) => onChange(event.target.value)}><option value="">Select</option>{property.enum.map((item) => <option key={String(item)}>{String(item)}</option>)}</select>{property.description && <small>{property.description}</small>}</label>;
+  if (property.type === "array" || property.type === "object") return <label className="dashboard-field dashboard-field-wide"><span>{label}</span><textarea value={value == null ? "" : JSON.stringify(value, null, 2)} onChange={(event) => {
     try { onChange(JSON.parse(event.target.value)); } catch { onChange(event.target.value); }
   }} />{property.description && <small>{property.description}</small>}</label>;
   const numeric = property.type === "number" || property.type === "integer";
-  return <label className="v2-field"><span>{label}</span><input type={numeric ? "number" : "text"} value={fieldValue(value)} onChange={(event) => onChange(numeric ? Number(event.target.value) : event.target.value)} />{property.description && <small>{property.description}</small>}</label>;
+  return <label className="dashboard-field"><span>{label}</span><input type={numeric ? "number" : "text"} value={fieldValue(value)} onChange={(event) => onChange(numeric ? Number(event.target.value) : event.target.value)} />{property.description && <small>{property.description}</small>}</label>;
 }
 
 function capabilityFromEvent(event: HistoryEvent, capabilities: Capability[]): Capability | null {
@@ -170,12 +170,12 @@ export function WorkflowStudio({ capabilities, initialCapability, onConsumed }: 
   }, [initialCapability, executable, onConsumed]);
   useEffect(() => {
     if (tab !== "history" || runs) return;
-    v2Api.historyRuns().then((payload) => setRuns(payload.items)).catch(() => setRuns([]));
+    api.historyRuns().then((payload) => setRuns(payload.items)).catch(() => setRuns([]));
   }, [tab, runs]);
   useEffect(() => {
     if (!historyRun) { setHistoryEvents([]); return; }
     setHistoryLoading(true);
-    v2Api.historyEvents({ run_name: historyRun, limit: 2000, order: "asc" })
+    api.historyEvents({ run_name: historyRun, limit: 2000, order: "asc" })
       .then((payload) => setHistoryEvents(payload.items))
       .catch(() => setHistoryEvents([]))
       .finally(() => setHistoryLoading(false));
@@ -233,7 +233,7 @@ export function WorkflowStudio({ capabilities, initialCapability, onConsumed }: 
     if (!draft.steps.length) { setError("Add at least one step before running the workflow."); return; }
     setRunning(true); setError(""); setResult(null);
     try {
-      setResult(await v2Api.createExecution("workflow.run", { alias: draft.alias.trim() || "Unsaved workflow", steps: draft.steps }, "background"));
+      setResult(await api.createExecution("workflow.run", { alias: draft.alias.trim() || "Unsaved workflow", steps: draft.steps }, "background"));
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Unable to start workflow"); }
     finally { setRunning(false); }
   };
@@ -248,45 +248,45 @@ export function WorkflowStudio({ capabilities, initialCapability, onConsumed }: 
     setTab("build");
   };
 
-  return <div className="v2-page v2-workflow-studio">
-    <div className="v2-studio-toolbar">
-      <div className="v2-segmented" role="tablist"><button type="button" className={tab === "build" ? "active" : ""} onClick={() => setTab("build")}>Build workflow</button><button type="button" className={tab === "history" ? "active" : ""} onClick={() => setTab("history")}>Analyze past run</button><button type="button" className={tab === "arsenal" ? "active" : ""} onClick={() => setTab("arsenal")}>Arsenal</button></div>
+  return <div className="dashboard-page dashboard-workflow-studio">
+    <div className="dashboard-studio-toolbar">
+      <div className="dashboard-segmented" role="tablist"><button type="button" className={tab === "build" ? "active" : ""} onClick={() => setTab("build")}>Build workflow</button><button type="button" className={tab === "history" ? "active" : ""} onClick={() => setTab("history")}>Analyze past run</button><button type="button" className={tab === "arsenal" ? "active" : ""} onClick={() => setTab("arsenal")}>Arsenal</button></div>
       <span>{draft.steps.length} step{draft.steps.length === 1 ? "" : "s"}{draft.id ? " / saved alias" : " / autosaved draft"}</span>
-      <div><button type="button" className="v2-button v2-button-small" onClick={() => { setDraft(emptyDraft()); setSelectedStep(""); setResult(null); }}>New</button><button type="button" className="v2-button v2-button-small" onClick={save}>Save alias</button><button type="button" className="v2-button v2-button-primary v2-button-small" disabled={running || !draft.steps.length} onClick={run}>{running ? "Queuing" : "Run workflow"}</button></div>
+      <div><button type="button" className="dashboard-button dashboard-button-small" onClick={() => { setDraft(emptyDraft()); setSelectedStep(""); setResult(null); }}>New</button><button type="button" className="dashboard-button dashboard-button-small" onClick={save}>Save alias</button><button type="button" className="dashboard-button dashboard-button-primary dashboard-button-small" disabled={running || !draft.steps.length} onClick={run}>{running ? "Queuing" : "Run workflow"}</button></div>
     </div>
     {error && <ErrorBanner message={error} onDismiss={() => setError("")} />}
-    {tab === "build" ? <div className="v2-studio-grid">
+    {tab === "build" ? <div className="dashboard-studio-grid">
       <Panel title="Workflow library" meta={`${saved.length} saved aliases`}>
-        <div className="v2-workflow-identity"><label className="v2-field"><span>Alias</span><input value={draft.alias} onChange={(event) => setDraft((current) => ({ ...current, alias: event.target.value }))} placeholder="e.g. pair-then-validate" /></label><label className="v2-field"><span>Purpose</span><textarea value={draft.description} onChange={(event) => setDraft((current) => ({ ...current, description: event.target.value }))} placeholder="What this sequence is for" /></label></div>
-        <div className="v2-saved-workflows">{saved.map((workflow) => <article key={workflow.id} className={draft.id === workflow.id ? "active" : ""}><button type="button" onClick={() => { setDraft({ id: workflow.id, alias: workflow.alias, description: workflow.description, steps: workflow.steps }); setSelectedStep(workflow.steps[0]?.id || ""); }}><strong>{workflow.alias}</strong><span>{workflow.steps.length} steps</span><small>{workflow.description || "No description"}</small></button><button type="button" title="Clone workflow" onClick={() => { const steps = workflow.steps.map((step) => ({ ...step, id: uid() })); setDraft({ alias: `${workflow.alias}-copy`, description: workflow.description, steps }); setSelectedStep(steps[0]?.id || ""); }}>Clone</button><button type="button" title="Delete workflow" onClick={() => { if (window.confirm(`Delete workflow alias “${workflow.alias}”?`)) setSaved((current) => current.filter((item) => item.id !== workflow.id)); }}>Delete</button></article>)}</div>
+        <div className="dashboard-workflow-identity"><label className="dashboard-field"><span>Alias</span><input value={draft.alias} onChange={(event) => setDraft((current) => ({ ...current, alias: event.target.value }))} placeholder="e.g. pair-then-validate" /></label><label className="dashboard-field"><span>Purpose</span><textarea value={draft.description} onChange={(event) => setDraft((current) => ({ ...current, description: event.target.value }))} placeholder="What this sequence is for" /></label></div>
+        <div className="dashboard-saved-workflows">{saved.map((workflow) => <article key={workflow.id} className={draft.id === workflow.id ? "active" : ""}><button type="button" onClick={() => { setDraft({ id: workflow.id, alias: workflow.alias, description: workflow.description, steps: workflow.steps }); setSelectedStep(workflow.steps[0]?.id || ""); }}><strong>{workflow.alias}</strong><span>{workflow.steps.length} steps</span><small>{workflow.description || "No description"}</small></button><button type="button" title="Clone workflow" onClick={() => { const steps = workflow.steps.map((step) => ({ ...step, id: uid() })); setDraft({ alias: `${workflow.alias}-copy`, description: workflow.description, steps }); setSelectedStep(steps[0]?.id || ""); }}>Clone</button><button type="button" title="Delete workflow" onClick={() => { if (window.confirm(`Delete workflow alias “${workflow.alias}”?`)) setSaved((current) => current.filter((item) => item.id !== workflow.id)); }}>Delete</button></article>)}</div>
       </Panel>
       <Panel title="Sequence" meta="Runs top to bottom">
         {!draft.steps.length && <EmptyState title="Build a sequence" detail="Add a capability from the palette. Each step can be configured before the workflow is saved or run." />}
-        <ol className="v2-sequence">{draft.steps.map((step, index) => {
+        <ol className="dashboard-sequence">{draft.steps.map((step, index) => {
           const capability = executable.find((item) => item.id === step.capability_id);
-          return <li key={step.id} className={selectedStep === step.id ? "active" : ""}><span className="v2-sequence-index">{String(index + 1).padStart(2, "0")}</span><button type="button" className="v2-sequence-node" onClick={() => setSelectedStep(step.id)}><strong>{step.label || capability?.title || step.capability_id}</strong><span>{capability?.description || step.capability_id}</span><small>{step.capability_id}{step.continue_on_error ? " / continue on error" : " / stop on error"}</small></button><div className="v2-sequence-actions"><button type="button" disabled={index === 0} onClick={() => moveStep(step.id, -1)} aria-label={`Move step ${index + 1} up`}>↑</button><button type="button" disabled={index === draft.steps.length - 1} onClick={() => moveStep(step.id, 1)} aria-label={`Move step ${index + 1} down`}>↓</button><button type="button" onClick={() => { setDraft((current) => ({ ...current, steps: current.steps.filter((item) => item.id !== step.id) })); if (selectedStep === step.id) setSelectedStep(""); }} aria-label={`Remove step ${index + 1}`}>×</button></div></li>;
+          return <li key={step.id} className={selectedStep === step.id ? "active" : ""}><span className="dashboard-sequence-index">{String(index + 1).padStart(2, "0")}</span><button type="button" className="dashboard-sequence-node" onClick={() => setSelectedStep(step.id)}><strong>{step.label || capability?.title || step.capability_id}</strong><span>{capability?.description || step.capability_id}</span><small>{step.capability_id}{step.continue_on_error ? " / continue on error" : " / stop on error"}</small></button><div className="dashboard-sequence-actions"><button type="button" disabled={index === 0} onClick={() => moveStep(step.id, -1)} aria-label={`Move step ${index + 1} up`}>↑</button><button type="button" disabled={index === draft.steps.length - 1} onClick={() => moveStep(step.id, 1)} aria-label={`Move step ${index + 1} down`}>↓</button><button type="button" onClick={() => { setDraft((current) => ({ ...current, steps: current.steps.filter((item) => item.id !== step.id) })); if (selectedStep === step.id) setSelectedStep(""); }} aria-label={`Remove step ${index + 1}`}>×</button></div></li>;
         })}</ol>
-        {result && <div className="v2-workflow-result"><strong>Workflow queued</strong><span>{result.id}</span><small>Track progress and step events in Live or Runs and Logs.</small></div>}
+        {result && <div className="dashboard-workflow-result"><strong>Workflow queued</strong><span>{result.id}</span><small>Track progress and step events in Live or Runs and Logs.</small></div>}
       </Panel>
       <Panel title={activeCapability ? "Configure step" : "Capability palette"} meta={activeCapability?.id || `${filtered.length} executable components`}>
-        {activeStep && activeCapability ? <div className="v2-step-editor"><div className="v2-step-editor-head"><button type="button" className="v2-text-button" onClick={() => setSelectedStep("")}>← Add another step</button><strong>{activeCapability.title}</strong><span>{activeCapability.description}</span></div><div className="v2-form-grid"><label className="v2-field v2-field-wide"><span>Step label</span><input value={activeStep.label} onChange={(event) => updateStep({ label: event.target.value })} /></label>{Object.entries(activeCapability.input_schema?.properties || {}).map(([name, property]) => <StepField key={name} name={name} property={property} value={activeStep.args[name]} onChange={(value) => updateStep({ args: { ...activeStep.args, [name]: value } })} />)}{!Object.keys(activeCapability.input_schema?.properties || {}).length && <label className="v2-field v2-field-wide"><span>Arguments JSON</span><textarea value={JSON.stringify(activeStep.args, null, 2)} onChange={(event) => { try { updateStep({ args: JSON.parse(event.target.value) }); } catch { /* retain valid value */ } }} /></label>}<label className="v2-checkbox-field v2-field-wide"><input type="checkbox" checked={activeStep.continue_on_error} onChange={(event) => updateStep({ continue_on_error: event.target.checked })} /><span>Continue to the next step if this step fails</span></label></div></div> : <><div className="v2-filterbar"><input aria-label="Search workflow capabilities" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search steps" /><select value={category} onChange={(event) => setCategory(event.target.value)}>{categories.map((item) => <option key={item}>{item}</option>)}</select></div><div className="v2-step-palette">{filtered.map((capability) => <button type="button" key={capability.id} onClick={() => addStep(capability)}><span>＋</span><strong>{capability.title}</strong><small>{capability.category}</small><p>{capability.description || capability.id}</p></button>)}{!filtered.length && <EmptyState title="No executable steps match" />}</div></>}
+        {activeStep && activeCapability ? <div className="dashboard-step-editor"><div className="dashboard-step-editor-head"><button type="button" className="dashboard-text-button" onClick={() => setSelectedStep("")}>← Add another step</button><strong>{activeCapability.title}</strong><span>{activeCapability.description}</span></div><div className="dashboard-form-grid"><label className="dashboard-field dashboard-field-wide"><span>Step label</span><input value={activeStep.label} onChange={(event) => updateStep({ label: event.target.value })} /></label>{Object.entries(activeCapability.input_schema?.properties || {}).map(([name, property]) => <StepField key={name} name={name} property={property} value={activeStep.args[name]} onChange={(value) => updateStep({ args: { ...activeStep.args, [name]: value } })} />)}{!Object.keys(activeCapability.input_schema?.properties || {}).length && <label className="dashboard-field dashboard-field-wide"><span>Arguments JSON</span><textarea value={JSON.stringify(activeStep.args, null, 2)} onChange={(event) => { try { updateStep({ args: JSON.parse(event.target.value) }); } catch { /* retain valid value */ } }} /></label>}<label className="dashboard-checkbox-field dashboard-field-wide"><input type="checkbox" checked={activeStep.continue_on_error} onChange={(event) => updateStep({ continue_on_error: event.target.checked })} /><span>Continue to the next step if this step fails</span></label></div></div> : <><div className="dashboard-filterbar"><input aria-label="Search workflow capabilities" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search steps" /><select value={category} onChange={(event) => setCategory(event.target.value)}>{categories.map((item) => <option key={item}>{item}</option>)}</select></div><div className="dashboard-step-palette">{filtered.map((capability) => <button type="button" key={capability.id} onClick={() => addStep(capability)}><span>＋</span><strong>{capability.title}</strong><small>{capability.category}</small><p>{capability.description || capability.id}</p></button>)}{!filtered.length && <EmptyState title="No executable steps match" />}</div></>}
       </Panel>
-    </div> : tab === "history" ? <div className="v2-history-workflow">
+    </div> : tab === "history" ? <div className="dashboard-history-workflow">
       <Panel title="Past agent runs" meta={`${runs?.length || 0} indexed`}>
         {!runs && <LoadingState label="Loading run history" />}
-        <div className="v2-run-list">{(runs || []).map((run) => { const name = String(run.run_name || ""); return <button type="button" key={name} className={historyRun === name ? "active" : ""} onClick={() => setHistoryRun(name)}><strong>{name}</strong><span>{Number(run.event_count || 0)} events</span><small>{String(run.last_timestamp || run.first_timestamp || "")}</small></button>; })}</div>
+        <div className="dashboard-run-list">{(runs || []).map((run) => { const name = String(run.run_name || ""); return <button type="button" key={name} className={historyRun === name ? "active" : ""} onClick={() => setHistoryRun(name)}><strong>{name}</strong><span>{Number(run.event_count || 0)} events</span><small>{String(run.last_timestamp || run.first_timestamp || "")}</small></button>; })}</div>
       </Panel>
       <Panel title={historyRun || "Workflow reconstruction"} meta={historyRun ? `${applicableCount} applicable · ${selectedApplicableCount} selected` : "Choose a run"}>
         {!historyRun && <EmptyState title="Select a historical run" detail="Its chronological event sequence will be reconstructed here." />}
         {historyLoading && <LoadingState label="Reconstructing sequence" />}
-        {!historyLoading && historyRun && <><div className="v2-history-sequence-actions"><div><p>Applicable events are preselected. Hover previews any record; click expands it. Unmatched events can be mapped to an executable capability and cloned too.</p>{hoveredEvent && <aside className="v2-history-hover-preview"><strong>{hoveredEvent.event_type}</strong><span>{hoveredEvent.actor || "system"} · {hoveredEvent.timestamp}</span><p>{eventPreview(hoveredEvent)}</p></aside>}</div><div><button type="button" className="v2-text-button" onClick={() => setSelectedHistory(applicableHistory.filter((item) => item.capability).map((item) => item.event.id))}>Select applicable</button><button type="button" className="v2-text-button" onClick={() => setSelectedHistory([])}>Select none</button><button type="button" className="v2-button v2-button-primary" disabled={!selectedApplicableCount} onClick={cloneHistory}>Clone {selectedApplicableCount} selected step{selectedApplicableCount === 1 ? "" : "s"}</button></div></div><ol className="v2-history-sequence">{applicableHistory.map(({ event, inferred, capability }, index) => {
+        {!historyLoading && historyRun && <><div className="dashboard-history-sequence-actions"><div><p>Applicable events are preselected. Hover previews any record; click expands it. Unmatched events can be mapped to an executable capability and cloned too.</p>{hoveredEvent && <aside className="dashboard-history-hover-preview"><strong>{hoveredEvent.event_type}</strong><span>{hoveredEvent.actor || "system"} · {hoveredEvent.timestamp}</span><p>{eventPreview(hoveredEvent)}</p></aside>}</div><div><button type="button" className="dashboard-text-button" onClick={() => setSelectedHistory(applicableHistory.filter((item) => item.capability).map((item) => item.event.id))}>Select applicable</button><button type="button" className="dashboard-text-button" onClick={() => setSelectedHistory([])}>Select none</button><button type="button" className="dashboard-button dashboard-button-primary" disabled={!selectedApplicableCount} onClick={cloneHistory}>Clone {selectedApplicableCount} selected step{selectedApplicableCount === 1 ? "" : "s"}</button></div></div><ol className="dashboard-history-sequence">{applicableHistory.map(({ event, inferred, capability }, index) => {
           const expanded = expandedHistory.includes(event.id);
           const checked = Boolean(capability && selectedHistory.includes(event.id));
           return <li key={event.id} className={`${expanded ? "expanded" : ""} ${checked ? "selected" : ""}`} onMouseEnter={() => setHoveredHistory(event.id)} onMouseLeave={() => setHoveredHistory(null)}>
             <input type="checkbox" aria-label={`Include event ${index + 1} in cloned workflow`} disabled={!capability} checked={checked} onChange={(change) => setSelectedHistory((current) => change.target.checked ? [...new Set([...current, event.id])] : current.filter((id) => id !== event.id))} />
             <span>{String(index + 1).padStart(2, "0")}</span><i className={capability ? "recognized" : "context"}>{capability ? "STEP" : "EVENT"}</i>
-            <button type="button" className="v2-history-event-summary" aria-expanded={expanded} onClick={() => setExpandedHistory((current) => current.includes(event.id) ? current.filter((id) => id !== event.id) : [...current, event.id])}><strong>{capability?.title || event.event_type}</strong><small>{event.actor || "system"} / {event.technique || "unclassified"} / {event.timestamp}</small><span aria-hidden="true">{expanded ? "−" : "+"}</span></button>
-            {expanded && <div className="v2-history-event-detail"><label className="v2-field"><span>Executable step mapping</span><select value={historyMappings[event.id] || capability?.id || "__context__"} onChange={(change) => {
+            <button type="button" className="dashboard-history-event-summary" aria-expanded={expanded} onClick={() => setExpandedHistory((current) => current.includes(event.id) ? current.filter((id) => id !== event.id) : [...current, event.id])}><strong>{capability?.title || event.event_type}</strong><small>{event.actor || "system"} / {event.technique || "unclassified"} / {event.timestamp}</small><span aria-hidden="true">{expanded ? "−" : "+"}</span></button>
+            {expanded && <div className="dashboard-history-event-detail"><label className="dashboard-field"><span>Executable step mapping</span><select value={historyMappings[event.id] || capability?.id || "__context__"} onChange={(change) => {
               const capabilityId = change.target.value;
               setHistoryMappings((current) => ({ ...current, [event.id]: capabilityId }));
               setSelectedHistory((current) => capabilityId !== "__context__" ? [...new Set([...current, event.id])] : current.filter((id) => id !== event.id));
@@ -294,9 +294,9 @@ export function WorkflowStudio({ capabilities, initialCapability, onConsumed }: 
           </li>;
         })}</ol></>}
       </Panel>
-    </div> : <div className="v2-workflow-arsenal">
+    </div> : <div className="dashboard-workflow-arsenal">
       <Panel title="Arsenal" meta="Presets, transforms, and tools available to workflow steps">
-        <p className="v2-muted">Use the same arsenal browser from this area to inspect reusable building blocks before adding them to a workflow.</p>
+        <p className="dashboard-muted">Use the same arsenal browser from this area to inspect reusable building blocks before adding them to a workflow.</p>
       </Panel>
       <ArsenalBrowser />
     </div>}

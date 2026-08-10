@@ -305,7 +305,7 @@ pytest -q
 
 ## Web dashboard
 
-A browser dashboard ships alongside the TUI (FastAPI backend + React/Vite SPA). WebUI V2
+A browser dashboard ships alongside the TUI (FastAPI backend + React/Vite SPA). The WebUI
 uses the same capability catalog and application services as the TUI, and adds a
 server-owned execution queue, resumable event streams, persistent multi-turn composition,
 workflow sequencing, provider/profile management, and current or historical evidence
@@ -332,7 +332,7 @@ Open the dashboard at <http://127.0.0.1:8787/>. The backend reuses the same engi
 TUI. For frontend hot-reload, run `npm run dev` in
 `wallbreaker/dashboard/web`; it proxies `/api` to the dashboard backend.
 
-### Configure providers and models in WebUI V2
+### Configure providers and models in WebUI
 
 1. Open **Models** in the WebUI navigation.
 2. Under **Provider management**, choose **Add provider** and enter a unique name.
@@ -359,7 +359,7 @@ single-operator interface.
 
 For complete installation, configuration, storage, development, and troubleshooting details,
 see the [WebUI setup guide](docs/SETUP.md). For a feature-by-feature visual tour, see the
-[WebUI V2 showcase](docs/WEBUI_V2_SHOWCASE.md).
+[WebUI showcase](docs/WEBUI_SHOWCASE.md).
 
 ## Responsible use
 

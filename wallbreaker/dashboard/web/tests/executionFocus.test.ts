@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { mergeExecutionRefresh, selectionAfterExecutionRefresh } from "../src/v2/executionFocus.ts";
-import type { ExecutionSummary } from "../src/v2/types.ts";
+import { mergeExecutionRefresh, selectionAfterExecutionRefresh } from "../src/dashboard/executionFocus.ts";
+import type { ExecutionSummary } from "../src/dashboard/types.ts";
 
 const execution = (id: string, status: ExecutionSummary["status"]): ExecutionSummary => ({
   id,

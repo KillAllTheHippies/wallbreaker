@@ -51,7 +51,9 @@ def _all() -> list[Path]:
 
 
 def _rel(p: Path) -> str:
-    return str(p.relative_to(library_dir())).removesuffix(".md")
+    # Logical corpus identifiers are always POSIX-style, regardless of the
+    # host filesystem. Filesystem operations continue to use Path objects.
+    return p.relative_to(library_dir()).with_suffix("").as_posix()
 
 
 def list_vendors() -> list[str]:

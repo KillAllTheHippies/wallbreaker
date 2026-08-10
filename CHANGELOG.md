@@ -3,14 +3,14 @@
 ## Unreleased — unified dashboard operator surface
 
 - Added a shared typed capability catalog so TUI behavior is the canonical contract and
-  every registered operation remains discoverable from V2.
+  every registered operation remains discoverable from the dashboard.
 - Added server-owned queued executions with pause, resume, steering, attacker switching,
   cancellation, and reconnectable sequenced events.
 - Added canonical JSONL history with a rebuildable SQLite search/correlation index.
 - Promoted the unified Agent and Live dashboard surfaces to the production root, with
   persistent multi-turn Compose, workflow sequencing and reconstruction, cross-run findings,
   run-log exploration, evidence reports, provider verification, and profile management.
-- Added historical-run selection to Live and preserved drafts and view state across V2
+- Added historical-run selection to Live and preserved drafts and view state across dashboard
   navigation.
 - Added [complete setup and development documentation](docs/SETUP.md).
 

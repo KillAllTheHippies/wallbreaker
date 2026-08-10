@@ -1,4 +1,9 @@
-export type V2Route =
+import type { Settings } from "../types";
+
+export type { ProviderRecord } from "../types";
+export type SettingsRecord = Settings;
+
+export type DashboardRoute =
   | "agent"
   | "live"
   | "compose"
@@ -38,7 +43,7 @@ export interface ExecutionSummary {
   output_tokens?: number;
   budget_used?: number;
   budget_limit?: number;
-  source?: "v2" | "history";
+  source?: "execution" | "history";
   [key: string]: unknown;
 }
 
@@ -178,19 +183,6 @@ export interface ArsenalItem {
   detail?: unknown;
 }
 
-export interface ProviderRecord {
-  name: string;
-  model?: string;
-  protocol?: string;
-  base_url?: string;
-  modality?: string;
-  enabled?: boolean;
-  reasoning?: boolean;
-  timeout?: number;
-  has_api_key?: boolean;
-  [key: string]: unknown;
-}
-
 export interface ComposePayload {
   request: string;
   preset?: string;
@@ -258,17 +250,7 @@ export interface ComposeResult extends ComposePayload {
   conversation?: ConsoleConversation;
 }
 
-export interface SettingsRecord {
-  agent?: {
-    max_rounds?: number;
-    max_tokens?: number;
-    concurrency?: number;
-    request_delay_ms?: number;
-  };
-  [key: string]: unknown;
-}
-
 export interface ApiResult<T> {
   data: T;
-  source: "v2";
+  source: "dashboard";
 }

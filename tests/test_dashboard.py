@@ -118,13 +118,13 @@ def test_run_detail_path_guard(tmp_path):
 
 def test_fire_requires_target(tmp_path):
     client = TestClient(create_app(config=None, sessions_dir=_sessions(tmp_path)))
-    r = client.post("/api/v2/fire", json={"request": "hello"})
+    r = client.post("/api/fire", json={"request": "hello"})
     assert r.status_code == 400
 
 
 def test_compose_builds_payload_without_target(tmp_path):
     client = TestClient(create_app(config=None, sessions_dir=_sessions(tmp_path)))
-    r = client.post("/api/v2/compose", json={"request": "hello", "transforms": ["base64"]})
+    r = client.post("/api/compose", json={"request": "hello", "transforms": ["base64"]})
     assert r.status_code == 200
     body = r.json()
     assert body["prompt"] == "hello"
@@ -169,7 +169,7 @@ def test_fire_records_full_console_attempt(monkeypatch, tmp_path):
 
     monkeypatch.setattr(tools_mod, "build_registry", lambda _config: FakeRegistry())
     client = TestClient(create_app(config=cfg, sessions_dir=sessions))
-    r = client.post("/api/v2/fire", json={"request": "hello", "transforms": ["base64"]})
+    r = client.post("/api/fire", json={"request": "hello", "transforms": ["base64"]})
 
     assert r.status_code == 200
     body = r.json()
@@ -233,9 +233,9 @@ def test_console_conversation_is_multi_turn_until_reset_and_archive(monkeypatch,
     monkeypatch.setattr(tools_mod, "build_registry", build_registry)
     client = TestClient(create_app(config=cfg, sessions_dir=sessions))
 
-    first = client.post("/api/v2/fire", json={"request": "first"}).json()
-    second = client.post("/api/v2/fire", json={"request": "follow up"}).json()
-    state = client.get("/api/v2/console/conversation").json()
+    first = client.post("/api/fire", json={"request": "first"}).json()
+    second = client.post("/api/fire", json={"request": "follow up"}).json()
+    state = client.get("/api/console/conversation").json()
 
     assert [name for name, _args in registries[0].calls] == ["query_target", "continue_target"]
     assert first["turn"]["continuation"] is False
@@ -244,7 +244,7 @@ def test_console_conversation_is_multi_turn_until_reset_and_archive(monkeypatch,
     assert state["turn_count"] == 2
     assert [turn["request"] for turn in state["turns"]] == ["first", "follow up"]
 
-    reset = client.post("/api/v2/console/conversation/reset").json()
+    reset = client.post("/api/console/conversation/reset").json()
     assert reset["ok"] is True
     assert reset["archived_run"] == first["run_log"]
     assert reset["active"] is False
@@ -255,7 +255,7 @@ def test_console_conversation_is_multi_turn_until_reset_and_archive(monkeypatch,
     assert records[-1]["kind"] == "conversation_archived"
     assert records[-1]["turn_count"] == 2
 
-    third = client.post("/api/v2/fire", json={"request": "new conversation"}).json()
+    third = client.post("/api/fire", json={"request": "new conversation"}).json()
     assert len(registries) == 2
     assert registries[1].calls[0][0] == "query_target"
     assert third["run_log"] != first["run_log"]
@@ -306,7 +306,7 @@ def test_agent_run_logs_full_scaffold_inference_and_tools(monkeypatch, tmp_path)
     monkeypatch.setattr(tools_mod, "build_registry", lambda _config: registry)
 
     client = TestClient(create_app(config=cfg, sessions_dir=sessions))
-    with client.stream("POST", "/api/v2/agent/run", json={
+    with client.stream("POST", "/api/agent/run", json={
         "objective": "full objective text", "max_rounds": 1, "max_tokens": 2048,
     }) as response:
         assert response.status_code == 200
@@ -343,7 +343,7 @@ def test_agent_run_logs_full_scaffold_inference_and_tools(monkeypatch, tmp_path)
 
 def test_agent_run_requires_target(tmp_path):
     client = TestClient(create_app(config=None, sessions_dir=_sessions(tmp_path)))
-    r = client.post("/api/v2/agent/run", json={"objective": "jailbreak the model"})
+    r = client.post("/api/agent/run", json={"objective": "jailbreak the model"})
     assert r.status_code == 400
     assert "target" in r.json()["detail"].lower()
 
@@ -353,7 +353,7 @@ def test_agent_run_requires_objective(tmp_path):
     ep = Endpoint("t", "openai", "http://x", "m")
     cfg = Config(default_profile="t", profiles={"t": ep}, target=ep)
     client = TestClient(create_app(config=cfg, sessions_dir=_sessions(tmp_path)))
-    r = client.post("/api/v2/agent/run", json={"objective": "   "})
+    r = client.post("/api/agent/run", json={"objective": "   "})
     assert r.status_code == 400
     assert "objective" in r.json()["detail"].lower()
 

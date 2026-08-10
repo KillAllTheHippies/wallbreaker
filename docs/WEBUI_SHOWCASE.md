@@ -1,11 +1,11 @@
-# Wallbreaker WebUI V2 showcase
+# Wallbreaker WebUI showcase
 
-WebUI V2 is a unified operator surface for running, steering, observing, and reviewing
+WebUI is a unified operator surface for running, steering, observing, and reviewing
 authorized LLM security evaluations. It places the TUI's Attack → Target → Judge loop at
 the center, then adds persistent composition, reusable workflows, historical visibility,
 evidence reporting, and model administration.
 
-The screenshots below were captured from the local V2 interface at 1440 pixels wide.
+The screenshots below were captured from the local dashboard interface at 1440 pixels wide.
 Provider credentials and detailed historical payload content are not shown.
 
 ## Run and steer the agent loop
@@ -15,7 +15,7 @@ the engagement, follows each Attack → Target → Judge stage, watches the conv
 stream, and can steer the attacker without leaving the page. Advanced run settings stay
 collapsed until needed.
 
-![Agent workspace showing the attack, target, and judge loop](images/webui-v2/agent.png)
+![Agent workspace showing the attack, target, and judge loop](images/webui/agent.png)
 
 Key capabilities:
 
@@ -31,7 +31,7 @@ Key capabilities:
 follow the current execution or inspect any retained historical run. Its overview moves
 from run-level totals into activity events and synchronized event detail.
 
-![Live observatory with historical run selection and run overview](images/webui-v2/live.png)
+![Live observatory with historical run selection and run overview](images/webui/live.png)
 
 The observatory provides:
 
@@ -47,7 +47,7 @@ The observatory provides:
 conversation; subsequent deliveries are contextual follow-ups until the operator
 explicitly resets and archives the thread.
 
-![Compose workspace with multi-turn conversation controls](images/webui-v2/compose.png)
+![Compose workspace with multi-turn conversation controls](images/webui/compose.png)
 
 Operators can preview the exact transformed payload, select presets and transforms,
 override the initial system prompt, set the token budget, and retain the complete target
@@ -59,7 +59,7 @@ conversation between navigation changes.
 steps from the shared capability catalog, configure their arguments, reorder the sequence,
 save an alias, clone a workflow, and run it as a server-owned execution.
 
-![Workflow sequencer and capability palette](images/webui-v2/workflows.png)
+![Workflow sequencer and capability palette](images/webui/workflows.png)
 
 The analysis mode can also reconstruct applicable events from historical agent runs.
 Individual events can be inspected and reusable steps selected before cloning them into an
@@ -71,7 +71,7 @@ editable sequence.
 Selecting an item opens its exact template, metadata, or argument contract in the detail
 panel.
 
-![Searchable Arsenal of presets, transforms, and tools](images/webui-v2/arsenal.png)
+![Searchable Arsenal of presets, transforms, and tools](images/webui/arsenal.png)
 
 The catalog and workflow palette are generated from the same shared capability manifest,
 preventing UI-only command drift.
@@ -82,7 +82,7 @@ preventing UI-only command drift.
 selected run can be viewed as a readable stream, a timeline, or raw JSONL. Event types and
 actors can be selected or excluded, and the visible result can be exported.
 
-![Runs and Logs explorer with stream, timeline, and raw views](images/webui-v2/runs.png)
+![Runs and Logs explorer with stream, timeline, and raw views](images/webui/runs.png)
 
 JSONL remains the canonical portable history. A disposable SQLite index adds full-text
 search and structured correlation and can be rebuilt from this screen.
@@ -92,7 +92,7 @@ search and structured correlation and can be rebuilt from this screen.
 **Reports** turns retained history into an operator-ready evidence portfolio. It supports
 all indexed runs or an individual run, with Markdown and structured evidence exports.
 
-![Reports dashboard with aggregate metrics and verdict distribution](images/webui-v2/reports.png)
+![Reports dashboard with aggregate metrics and verdict distribution](images/webui/reports.png)
 
 The dashboard brings together run counts, graded responses, strict bypasses, attack
 success rate, per-run comparison, verdict distribution, technique performance, and the
@@ -104,7 +104,7 @@ generated narrative report.
 Credential verification makes a real authenticated provider request, while provider
 management supports creation, editing, discovery, enable/disable state, and removal.
 
-![Models workspace with provider verification and management](images/webui-v2/models.png)
+![Models workspace with provider verification and management](images/webui/models.png)
 
 Attacker, target, and judge assignments remain visible in the global top bar. Named
 profiles and custom provider/model combinations can be managed without leaving the WebUI.

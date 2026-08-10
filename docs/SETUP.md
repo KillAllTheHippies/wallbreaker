@@ -150,7 +150,7 @@ bundle served on port 8787, run `npm run build` again and refresh the browser.
 | `sessions/.wallbreaker_history.sqlite3` | Rebuildable search and correlation index |
 
 JSONL is the source of truth. The SQLite history index may be deleted and rebuilt from
-V2's Runs and Logs screen or through `POST /api/v2/history/rebuild`. Archive or remove
+the dashboard's Runs and Logs screen or through `POST /api/history/rebuild`. Archive or remove
 canonical run files only when you intend to remove that evidence.
 
 ## Verify the installation
@@ -188,6 +188,6 @@ retained as visible parse errors rather than silently discarded.
 
 ### Browser state appears stale
 
-Hard-refresh after rebuilding the frontend. V2 keeps drafts, selected views, conversation
+Hard-refresh after rebuilding the frontend. The dashboard keeps drafts, selected views, conversation
 state, and workflow state while navigating; resetting or archiving a conversation is an
 explicit action.

@@ -13,11 +13,26 @@ from wallbreaker.dashboard import server as dashboard_server  # noqa: E402
 from wallbreaker.dashboard.server import create_app, serve  # noqa: E402
 
 
-def test_v2_capabilities_include_every_tui_command(tmp_path):
+@pytest.mark.parametrize(
+    ("method", "suffix"),
+    [
+        ("GET", "/capabilities"),
+        ("POST", "/agent/run"),
+        ("GET", "/executions"),
+        ("GET", "/history/status"),
+    ],
+)
+def test_removed_versioned_api_paths_return_404(tmp_path, method, suffix):
+    client = TestClient(create_app(config=None, sessions_dir=tmp_path))
+    path = "/api/" + "v" + str(2) + suffix
+    assert client.request(method, path, json={} if method == "POST" else None).status_code == 404
+
+
+def test_dashboard_capabilities_include_every_tui_command(tmp_path):
     from wallbreaker.capabilities import TUI_SOURCE
 
     client = TestClient(create_app(config=None, sessions_dir=tmp_path))
-    payload = client.get("/api/v2/capabilities").json()
+    payload = client.get("/api/capabilities").json()
     represented = {
         token
         for item in payload["capabilities"]
@@ -79,18 +94,18 @@ def test_provider_test_reports_discovered_catalog_without_inference(tmp_path, mo
     assert "inference" not in payload
 
 
-def test_v2_execution_crud_and_validation(tmp_path):
+def test_dashboard_execution_crud_and_validation(tmp_path):
     app = create_app(config=None, sessions_dir=tmp_path)
     client = TestClient(app)
-    assert client.post("/api/v2/executions", json={}).status_code == 400
+    assert client.post("/api/executions", json={}).status_code == 400
     assert client.post(
-        "/api/v2/executions", json={"capability_id": "does.not.exist"}
+        "/api/executions", json={"capability_id": "does.not.exist"}
     ).status_code == 400
-    assert client.get("/api/v2/executions").json() == []
-    assert client.post("/api/v2/executions/missing/attacker", json={}).status_code == 404
+    assert client.get("/api/executions").json() == []
+    assert client.post("/api/executions/missing/attacker", json={}).status_code == 404
 
 
-def test_v2_history_search_and_rebuild(tmp_path):
+def test_dashboard_history_search_and_rebuild(tmp_path):
     run = tmp_path / "run-20260801-120000.jsonl"
     run.write_text(
         json.dumps({
@@ -101,14 +116,14 @@ def test_v2_history_search_and_rebuild(tmp_path):
         encoding="utf-8",
     )
     with TestClient(create_app(config=None, sessions_dir=tmp_path)) as client:
-        rebuilt = client.post("/api/v2/history/rebuild").json()
+        rebuilt = client.post("/api/history/rebuild").json()
         assert rebuilt["run_count"] == 1
-        payload = client.get("/api/v2/history/events", params={"q": "distinctive"}).json()
+        payload = client.get("/api/history/events", params={"q": "distinctive"}).json()
         assert payload["total"] == 1
         assert "must-not-leak" not in payload["items"][0]["structured_json"]
 
 
-def test_v2_bookmarks_toggle_and_persist_separately_from_history(tmp_path):
+def test_dashboard_bookmarks_toggle_and_persist_separately_from_history(tmp_path):
     bookmark = {
         "kind": "event",
         "key": "run-20260801-120000.jsonl:7",
@@ -117,29 +132,29 @@ def test_v2_bookmarks_toggle_and_persist_separately_from_history(tmp_path):
         "source_line": 7,
     }
     with TestClient(create_app(config=None, sessions_dir=tmp_path)) as client:
-        created = client.post("/api/v2/bookmarks/toggle", json=bookmark)
+        created = client.post("/api/bookmarks/toggle", json=bookmark)
         assert created.status_code == 200
         assert created.json()["bookmarked"] is True
-        assert client.get("/api/v2/bookmarks").json()["items"][0]["key"] == bookmark["key"]
+        assert client.get("/api/bookmarks").json()["items"][0]["key"] == bookmark["key"]
 
     assert not list(tmp_path.glob("run-*.jsonl"))
     with TestClient(create_app(config=None, sessions_dir=tmp_path)) as client:
-        assert client.get("/api/v2/bookmarks").json()["items"][0]["source_line"] == 7
-        removed = client.post("/api/v2/bookmarks/toggle", json=bookmark)
+        assert client.get("/api/bookmarks").json()["items"][0]["source_line"] == 7
+        removed = client.post("/api/bookmarks/toggle", json=bookmark)
         assert removed.json()["bookmarked"] is False
-        assert client.get("/api/v2/bookmarks").json() == {"items": []}
+        assert client.get("/api/bookmarks").json() == {"items": []}
 
 
-def test_v2_bookmarks_reject_invalid_kind(tmp_path):
+def test_dashboard_bookmarks_reject_invalid_kind(tmp_path):
     with TestClient(create_app(config=None, sessions_dir=tmp_path)) as client:
         response = client.post(
-            "/api/v2/bookmarks/toggle",
+            "/api/bookmarks/toggle",
             json={"kind": "credential", "key": "not-allowed"},
         )
         assert response.status_code == 400
 
 
-def test_v2_report_uses_canonical_run_log(tmp_path):
+def test_dashboard_report_uses_canonical_run_log(tmp_path):
     run = tmp_path / "run-20260801-120000.jsonl"
     run.write_text(
         "\n".join([
@@ -149,20 +164,20 @@ def test_v2_report_uses_canonical_run_log(tmp_path):
         encoding="utf-8",
     )
     with TestClient(create_app(config=None, sessions_dir=tmp_path)) as client:
-        response = client.get("/api/v2/reports/run-20260801-120000")
+        response = client.get("/api/reports/run-20260801-120000")
         assert response.status_code == 200
         payload = response.json()
         assert payload["scorecard"]["strict_hits"] == 1
         assert payload["scorecard"]["graded_fires"] == 1
         assert "Evaluate target" in payload["markdown"]
         assert payload["findings"][0]["technique"] == "pair"
-        assert client.get("/api/v2/reports/run-20260801-120000.jsonl").status_code == 200
+        assert client.get("/api/reports/run-20260801-120000.jsonl").status_code == 200
 
 
-def test_v2_runs_headless_tui_catalog_capability(tmp_path):
+def test_dashboard_runs_headless_tui_catalog_capability(tmp_path):
     with TestClient(create_app(config=None, sessions_dir=tmp_path)) as client:
         created = client.post(
-            "/api/v2/executions",
+            "/api/executions",
             json={
                 "capability_id": "tui.help",
                 "args": {"arguments": "session"},
@@ -172,7 +187,7 @@ def test_v2_runs_headless_tui_catalog_capability(tmp_path):
         assert created.status_code == 200
         execution_id = created.json()["id"]
         for _ in range(50):
-            execution = client.get(f"/api/v2/executions/{execution_id}").json()
+            execution = client.get(f"/api/executions/{execution_id}").json()
             if execution["status"] in {"succeeded", "failed", "cancelled"}:
                 break
             time.sleep(0.01)
@@ -180,10 +195,10 @@ def test_v2_runs_headless_tui_catalog_capability(tmp_path):
         assert "/session" in execution["result"]["content"]
 
 
-def test_v2_runs_ordered_workflow_and_emits_step_events(tmp_path):
+def test_dashboard_runs_ordered_workflow_and_emits_step_events(tmp_path):
     with TestClient(create_app(config=None, sessions_dir=tmp_path)) as client:
         created = client.post(
-            "/api/v2/executions",
+            "/api/executions",
             json={
                 "capability_id": "workflow.run",
                 "args": {
@@ -199,7 +214,7 @@ def test_v2_runs_ordered_workflow_and_emits_step_events(tmp_path):
         assert created.status_code == 200
         execution_id = created.json()["id"]
         for _ in range(50):
-            execution = client.get(f"/api/v2/executions/{execution_id}").json()
+            execution = client.get(f"/api/executions/{execution_id}").json()
             if execution["status"] in {"succeeded", "failed", "cancelled"}:
                 break
             time.sleep(0.01)
@@ -208,7 +223,7 @@ def test_v2_runs_ordered_workflow_and_emits_step_events(tmp_path):
             "tui.help", "tui.help",
         ]
         events = client.get(
-            f"/api/v2/executions/{execution_id}/events",
+            f"/api/executions/{execution_id}/events",
             params={"stream": "false"},
         ).json()["events"]
         kinds = [event["type"] for event in events]
@@ -216,23 +231,23 @@ def test_v2_runs_ordered_workflow_and_emits_step_events(tmp_path):
         assert kinds.count("workflow_step_succeeded") == 2
 
 
-def test_v2_rejects_empty_and_recursive_workflows(tmp_path):
+def test_dashboard_rejects_empty_and_recursive_workflows(tmp_path):
     with TestClient(create_app(config=None, sessions_dir=tmp_path)) as client:
         empty = client.post(
-            "/api/v2/executions",
+            "/api/executions",
             json={"capability_id": "workflow.run", "args": {"steps": []}},
         )
         assert empty.status_code == 200
         execution_id = empty.json()["id"]
         for _ in range(50):
-            execution = client.get(f"/api/v2/executions/{execution_id}").json()
+            execution = client.get(f"/api/executions/{execution_id}").json()
             if execution["status"] in {"succeeded", "failed", "cancelled"}:
                 break
             time.sleep(0.01)
         assert execution["status"] == "failed"
 
         recursive = client.post(
-            "/api/v2/executions",
+            "/api/executions",
             json={
                 "capability_id": "workflow.run",
                 "args": {"steps": [{"capability_id": "workflow.run", "args": {}}]},
@@ -248,15 +263,16 @@ def test_production_shell_is_root_only(tmp_path):
     (dist / "index.html").write_text("<main>wallbreaker shell</main>", encoding="utf-8")
     with TestClient(create_app(config=None, sessions_dir=tmp_path / "sessions", web_dir=web)) as client:
         assert "wallbreaker shell" in client.get("/").text
-        assert client.get("/v2").status_code == 404
+        assert client.get("/legacy-dashboard").status_code == 404
 
 
-def test_v2_dashboard_bounds_polling_and_fetch_lifetime():
+def test_dashboard_bounds_polling_and_fetch_lifetime():
     root = Path(__file__).resolve().parents[1] / "wallbreaker" / "dashboard" / "web" / "src"
-    app_source = (root / "v2" / "V2App.tsx").read_text(encoding="utf-8")
+    app_source = (root / "dashboard" / "DashboardApp.tsx").read_text(encoding="utf-8")
     api_source = (root / "api.ts").read_text(encoding="utf-8")
     assert "executionsRequestInFlight" in app_source
     assert ".finally(() =>" in app_source
+    assert "window.location.hash = `/${next}`" in app_source
     assert "new AbortController()" in api_source
     assert "30_000" in api_source
 
@@ -267,7 +283,7 @@ def test_dashboard_refuses_network_bind_without_explicit_acknowledgement():
 
 
 @pytest.mark.asyncio
-async def test_v2_event_cursor_payload_uses_stable_envelope(tmp_path):
+async def test_dashboard_event_cursor_payload_uses_stable_envelope(tmp_path):
     app = create_app(config=None, sessions_dir=tmp_path)
     manager = app.state.execution_manager
 

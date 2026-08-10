@@ -1,6 +1,6 @@
 """Safe, display-oriented metadata for the 0DIN Jailbreak Evaluation Framework.
 
-JEF behavior identifiers are exposed to the V2 Agent Panel without shipping
+JEF behavior identifiers are exposed to the Dashboard Agent panel without shipping
 benchmark prompts into the dashboard. The selected identifier is bound to the
 existing authorized agent objective and retained as run metadata.
 """

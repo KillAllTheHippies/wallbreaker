@@ -20,6 +20,14 @@ def test_corpus_present_and_multivendor():
     assert len(sp._all()) > 50
 
 
+def test_logical_corpus_paths_are_polyglot():
+    path = sp._find_file("OpenAI\\gpt-4o")
+    assert path is not None
+    logical = sp._rel(path)
+    assert logical == "OpenAI/gpt-4o"
+    assert "\\" not in logical
+
+
 def test_match_target_routes_to_right_vendor():
     cases = {
         "anthropic/claude-opus-4.6": "Anthropic",

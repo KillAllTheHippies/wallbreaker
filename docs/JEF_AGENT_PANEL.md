@@ -1,6 +1,6 @@
-# JEF behavior selection in Wallbreaker V2
+# JEF behavior selection in the Wallbreaker Dashboard
 
-Wallbreaker V2 includes the 0DIN Jailbreak Evaluation Framework (JEF) as an
+The Wallbreaker Dashboard includes the 0DIN Jailbreak Evaluation Framework (JEF) as an
 authorized evaluation-behavior catalog. The Agent Panel and Compose tab share
 the same selector, covering every standardized behavior exposed by the
 installed JEF 0.8.0 release (including its two legacy definitions):
@@ -14,7 +14,7 @@ installed JEF 0.8.0 release (including its two legacy definitions):
 - copyright
 
 Selecting a behavior binds the run or composed turn to a stable JEF behavior
-identifier. Wallbreaker passes that identifier through the existing V2 agent or
+identifier. Wallbreaker passes that identifier through the dashboard agent or
 composition workflow and records it in the run evidence. The dashboard exposes
 labels, categories, descriptions, and thresholds only; benchmark prompts and
 raw harmful test content are not loaded into the UI.
@@ -53,7 +53,7 @@ execute. Completion requires both conditions:
    `pass_threshold` (for example, the copyright behavior uses 80 rather than 70).
 
 A missing/unavailable JEF evaluation, a below-threshold score, or a failing normal
-judge verdict blocks completion and leaves the autonomous loop open. V2 shows a
+judge verdict blocks completion and leaves the autonomous loop open. The dashboard shows a
 compact retry control that queues guidance through the existing Agent steering
 workflow. Findings retain the ordinary verdict and add only a small adjacent JEF
 score/threshold indicator when JEF metadata is present. JEF evidence remains an

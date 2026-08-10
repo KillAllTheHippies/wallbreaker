@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { v2Api } from "./api";
+import { api } from "../api";
 import type { BookmarkRecord } from "./types";
 
 export function bookmarkId(bookmark: Pick<BookmarkRecord, "kind" | "key">): string {
@@ -11,7 +11,7 @@ export function useBookmarks() {
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   useEffect(() => {
-    v2Api.bookmarks().then((payload) => setItems(payload.items)).catch((reason) => {
+    api.bookmarks().then((payload) => setItems(payload.items)).catch((reason) => {
       setError(reason instanceof Error ? reason.message : "Unable to load bookmarks");
     });
   }, []);
@@ -21,7 +21,7 @@ export function useBookmarks() {
     const id = bookmarkId(bookmark);
     setBusy(id); setError("");
     try {
-      const result = await v2Api.toggleBookmark(bookmark);
+      const result = await api.toggleBookmark(bookmark);
       setItems(result.items);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Unable to update bookmark");
@@ -40,7 +40,7 @@ export function BookmarkButton({ active, busy, label, onClick }: {
 }) {
   return <button
     type="button"
-    className={`v2-bookmark-button ${active ? "active" : ""}`}
+    className={`dashboard-bookmark-button ${active ? "active" : ""}`}
     aria-pressed={active}
     aria-label={`${active ? "Remove bookmark from" : "Bookmark"} ${label}`}
     title={`${active ? "Remove bookmark" : "Bookmark"}: ${label}`}

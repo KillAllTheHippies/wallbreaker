@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { RoleAssignments } from "../api";
-import { v2Api } from "./api";
+import { api } from "../api";
 import { JEFBehaviorPicker } from "./JEFBehaviorPicker";
 import { JEFResult } from "./JEFResult";
 import {
@@ -54,7 +54,7 @@ function useExecutionEvents(
     if (!execution) return;
     if (execution.source === "history") {
       setStreamState("loading");
-      v2Api.storedRunEvents(execution.run_id || execution.id).then((loaded) => {
+      api.storedRunEvents(execution.run_id || execution.id).then((loaded) => {
         setEvents(loaded);
         setStreamState("complete");
       }).catch(() => setStreamState("unavailable"));
@@ -66,7 +66,7 @@ function useExecutionEvents(
     const connect = async () => {
       setStreamState("connected");
       try {
-        await v2Api.streamEvents(execution.id, reconnect, (event) => {
+        await api.streamEvents(execution.id, reconnect, (event) => {
           reconnect = Math.max(reconnect, event.sequence);
           setEvents((current) => current.some((item) => item.id === event.id)
             ? current
@@ -116,14 +116,14 @@ function LiveRunSelector({
   onSelect: (runName: string) => void;
 }) {
   const currentValue = selectedRun || (execution ? "__current__" : "");
-  return <section className="v2-live-selector" aria-label="Live run selection">
+  return <section className="dashboard-live-selector" aria-label="Live run selection">
     <div><strong>Run to observe</strong><span>{selectedRun ? "Historical evidence" : execution ? "Current execution" : "Choose a retained run"}</span></div>
-    <label><span className="v2-sr-only">Select current or historical run</span><select value={currentValue} onChange={(event) => onSelect(event.target.value === "__current__" ? "" : event.target.value)}>
+    <label><span className="dashboard-sr-only">Select current or historical run</span><select value={currentValue} onChange={(event) => onSelect(event.target.value === "__current__" ? "" : event.target.value)}>
       {!execution && <option value="">Select a historical run</option>}
       {execution && <option value="__current__">Current execution · {execution.title || execution.id}</option>}
       {runs.map((run) => <option key={run.run_name} value={run.run_name}>{run.run_name} · {run.event_count || 0} events</option>)}
     </select></label>
-    <span className="v2-live-selector-meta">{runs.length} retained runs</span>
+    <span className="dashboard-live-selector-meta">{runs.length} retained runs</span>
   </section>;
 }
 
@@ -167,11 +167,11 @@ function hasValue(value: unknown): boolean {
 
 function Conversation({ value }: { value: unknown }) {
   if (!Array.isArray(value) || !value.length) return <EmptyState title="No conversation yet" detail="Conversation context appears as the run exchanges messages and tool results." />;
-  return <ol className="v2-event-conversation">{value.map((raw, index) => {
+  return <ol className="dashboard-event-conversation">{value.map((raw, index) => {
     const item = raw && typeof raw === "object" ? raw as Record<string, unknown> : { content: String(raw) };
     const role = String(item.role || "system");
     const type = String(item.type || "message");
-    return <li key={`${index}-${role}-${type}`} className={`v2-conversation-${role.toLowerCase()}`}>
+    return <li key={`${index}-${role}-${type}`} className={`dashboard-conversation-${role.toLowerCase()}`}>
       <header><strong>{role}</strong><span>{type.replace(/_/g, " ")}{item.name ? ` · ${String(item.name)}` : ""}</span></header>
       {hasValue(item.content) && <p>{String(item.content)}</p>}
       {hasValue(item.arguments) && <details><summary>Arguments</summary><JsonBlock value={item.arguments} /></details>}
@@ -182,7 +182,7 @@ function Conversation({ value }: { value: unknown }) {
 function Inspector({ event }: { event: EventEnvelope | null }) {
   const [tab, setTab] = useState<InspectorTab>("overview");
 
-  if (!event) return <aside className="v2-inspector"><EmptyState title="Select an event" detail="Matrix cells and timeline rows open synchronized evidence here." /></aside>;
+  if (!event) return <aside className="dashboard-inspector"><EmptyState title="Select an event" detail="Matrix cells and timeline rows open synchronized evidence here." /></aside>;
   const jef = jefEvaluation(event);
   const jefMetadata = jef ? {
     behavior: jef.behavior,
@@ -208,7 +208,7 @@ function Inspector({ event }: { event: EventEnvelope | null }) {
       return <JsonBlock value={Object.fromEntries(Object.entries(payload).filter(([, value]) => hasValue(value)))} empty="No request, response, or artifact payload was recorded." />;
     }
     if (tab === "evaluation") {
-      if (jef) return <div className="v2-inspector-summary"><JEFResult evaluation={jef} /><div className="v2-inspector-section"><h4>JEF metadata</h4><JsonBlock value={jefMetadata} /></div></div>;
+      if (jef) return <div className="dashboard-inspector-summary"><JEFResult evaluation={jef} /><div className="dashboard-inspector-section"><h4>JEF metadata</h4><JsonBlock value={jefMetadata} /></div></div>;
       const evaluation = {
         verdict: event.verdict,
         evidence: valueAt(event, "evidence") || valueAt(event, "key_evidence"),
@@ -217,12 +217,12 @@ function Inspector({ event }: { event: EventEnvelope | null }) {
       return <JsonBlock value={Object.fromEntries(Object.entries(evaluation).filter(([, value]) => hasValue(value)))} empty="This activity has not been evaluated." />;
     }
     return (
-      <div className="v2-inspector-summary">
-        <div className="v2-inspector-heading">
+      <div className="dashboard-inspector-summary">
+        <div className="dashboard-inspector-heading">
           <div><span>Selected event</span><h3>{eventTitle(event)}</h3></div>
           <VerdictBadge verdict={event.verdict} />
         </div>
-        <dl className="v2-kv">
+        <dl className="dashboard-kv">
           <div><dt>Actor</dt><dd>{actorLabel(event)}</dd></div>
           <div><dt>Round</dt><dd>{event.round ?? "--"}</dd></div>
           <div><dt>Strategy</dt><dd>{event.strategy || "Unclassified"}</dd></div>
@@ -230,16 +230,16 @@ function Inspector({ event }: { event: EventEnvelope | null }) {
           <div><dt>Latency</dt><dd>{formatDuration(event.latency_ms)}</dd></div>
           <div><dt>Tokens in / out</dt><dd>{formatTokens(event.input_tokens, event.output_tokens)}</dd></div>
         </dl>
-        {jef ? <><JEFResult evaluation={jef} /><div className="v2-inspector-section"><h4>JEF metadata</h4><JsonBlock value={jefMetadata} /></div></> : <div className="v2-inspector-section"><h4>Content</h4><JsonBlock value={event.text || event.summary} empty="No text content recorded." /></div>}
-        {event.verdict && <div className="v2-inspector-section"><h4>Verdict</h4><VerdictBadge verdict={event.verdict} /></div>}
+        {jef ? <><JEFResult evaluation={jef} /><div className="dashboard-inspector-section"><h4>JEF metadata</h4><JsonBlock value={jefMetadata} /></div></> : <div className="dashboard-inspector-section"><h4>Content</h4><JsonBlock value={event.text || event.summary} empty="No text content recorded." /></div>}
+        {event.verdict && <div className="dashboard-inspector-section"><h4>Verdict</h4><VerdictBadge verdict={event.verdict} /></div>}
       </div>
     );
   })();
 
   return (
-    <aside className="v2-inspector" aria-label="Evidence inspector">
-      <header><div><h2>Event detail</h2><span className="v2-mono">#{event.sequence} · {event.id}</span></div></header>
-      <div className="v2-inspector-tabs" role="tablist" aria-label="Evidence detail">
+    <aside className="dashboard-inspector" aria-label="Evidence inspector">
+      <header><div><h2>Event detail</h2><span className="dashboard-mono">#{event.sequence} · {event.id}</span></div></header>
+      <div className="dashboard-inspector-tabs" role="tablist" aria-label="Evidence detail">
         {INSPECTOR_TABS.map((item) => <button
           type="button"
           key={item.id}
@@ -249,7 +249,7 @@ function Inspector({ event }: { event: EventEnvelope | null }) {
           onClick={() => setTab(item.id)}
         >{item.label}</button>)}
       </div>
-      <div className="v2-inspector-body">{content}</div>
+      <div className="dashboard-inspector-body">{content}</div>
     </aside>
   );
 }
@@ -275,8 +275,8 @@ function StrategyMatrix({ events, selected, onSelect, maxRounds }: {
 
   if (!strategies.length) return <EmptyState title="No strategy rounds recorded" detail="The matrix will populate as strategy and round events arrive." />;
   return (
-    <div className="v2-matrix-scroll">
-      <table className="v2-matrix">
+    <div className="dashboard-matrix-scroll">
+      <table className="dashboard-matrix">
         <thead><tr><th>Strategy</th>{Array.from({ length: rounds }, (_, index) => <th key={index}>{index + 1}</th>)}<th>Bypass</th></tr></thead>
         <tbody>{strategies.map(([strategy, row], rowIndex) => {
           const bypasses = [...row.values()].filter((event) => eventStatus(event) === "bypass").length;
@@ -289,14 +289,14 @@ function StrategyMatrix({ events, selected, onSelect, maxRounds }: {
               return <td key={index}>
                 {event ? <button
                   type="button"
-                  className={`v2-matrix-cell ${status} ${selected?.id === event.id ? "selected" : ""}`}
+                  className={`dashboard-matrix-cell ${status} ${selected?.id === event.id ? "selected" : ""}`}
                   aria-label={`${strategy}: ${label}`}
                   title={label}
                   onClick={() => onSelect(event)}
-                >{status === "inconclusive" ? "I" : status.charAt(0).toUpperCase()}</button> : <span className="v2-matrix-empty">-</span>}
+                >{status === "inconclusive" ? "I" : status.charAt(0).toUpperCase()}</button> : <span className="dashboard-matrix-empty">-</span>}
               </td>;
             })}
-            <td className="v2-mono">{bypasses}</td>
+            <td className="dashboard-mono">{bypasses}</td>
           </tr>;
         })}</tbody>
       </table>
@@ -320,20 +320,20 @@ function RunOverview({ events, selected, onSelect, execution, streamState }: {
   return <Panel
     title="Run overview"
     meta={`Holistic status · stream ${streamState}`}
-    className="v2-overview-panel"
+    className="dashboard-overview-panel"
     actions={execution ? <StatusBadge status={execution.status} /> : undefined}
   >
-    <div className="v2-live-metrics">
+    <div className="dashboard-live-metrics">
       <article><span>Round</span><strong>{observedRound || execution?.current_round || 0}<small> / {execution?.max_rounds || "—"}</small></strong></article>
       <article><span>Messages</span><strong>{messages}</strong></article>
       <article><span>Actions</span><strong>{actions}</strong></article>
       <article><span>Results</span><strong>{outcomes}</strong></article>
       <article><span>Tokens in / out</span><strong>{formatTokens(usage?.input_tokens ?? execution?.input_tokens, usage?.output_tokens ?? execution?.output_tokens)}</strong></article>
     </div>
-    {hasStrategies ? <details className="v2-overview-matrix" open>
-      <summary><span>Strategy by round</span><span className="v2-legend"><i className="pass">P Pass</i><i className="fail">F Fail</i><i className="bypass">B Bypass</i><i className="inconclusive">I Inconclusive</i></span></summary>
+    {hasStrategies ? <details className="dashboard-overview-matrix" open>
+      <summary><span>Strategy by round</span><span className="dashboard-legend"><i className="pass">P Pass</i><i className="fail">F Fail</i><i className="bypass">B Bypass</i><i className="inconclusive">I Inconclusive</i></span></summary>
       <StrategyMatrix events={events} selected={selected} onSelect={onSelect} maxRounds={execution?.max_rounds} />
-    </details> : <p className="v2-overview-note">Strategy evidence will appear here when a run records classified techniques and rounds.</p>}
+    </details> : <p className="dashboard-overview-note">Strategy evidence will appear here when a run records classified techniques and rounds.</p>}
   </Panel>;
 }
 
@@ -375,24 +375,24 @@ function Timeline({ events, rawEvents, selected, onSelect, liveTail, setLiveTail
     <Panel
       title="Event timeline"
       meta={`${filtered.length} shown · ${events.length} activities · ${rawEvents.length} raw events`}
-      className="v2-timeline-panel"
+      className="dashboard-timeline-panel"
       actions={<>
-        <div className="v2-view-toggle" role="group" aria-label="Timeline detail level">
+        <div className="dashboard-view-toggle" role="group" aria-label="Timeline detail level">
           <button type="button" aria-pressed={view === "activity"} onClick={() => { setView("activity"); setActor("all"); setKind("all"); setVerdict("all"); }}>Activity</button>
           <button type="button" aria-pressed={view === "raw"} onClick={() => { setView("raw"); setActor("all"); setKind("all"); setVerdict("all"); }}>Raw</button>
         </div>
-        <label className="v2-switch"><input type="checkbox" checked={liveTail} onChange={(event) => setLiveTail(event.target.checked)} /><span>Live tail</span></label>
-        {unread > 0 && <button type="button" className="v2-button v2-button-small" onClick={markRead}>{unread} unread / mark read</button>}
+        <label className="dashboard-switch"><input type="checkbox" checked={liveTail} onChange={(event) => setLiveTail(event.target.checked)} /><span>Live tail</span></label>
+        {unread > 0 && <button type="button" className="dashboard-button dashboard-button-small" onClick={markRead}>{unread} unread / mark read</button>}
       </>}
     >
-      <div className="v2-filterbar">
-        <label className="v2-search"><span className="v2-sr-only">Search events</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={`Search ${view === "activity" ? "activity" : "raw events"}`} /></label>
-        {actors.length > 1 && <label><span className="v2-sr-only">Actor</span><select value={actor} onChange={(event) => setActor(event.target.value)}><option value="all">All actors</option>{actors.map((value) => <option key={value}>{value}</option>)}</select></label>}
-        {kinds.length > 1 && <label><span className="v2-sr-only">Event type</span><select value={kind} onChange={(event) => setKind(event.target.value)}><option value="all">All event types</option>{kinds.map((value) => <option key={value}>{value.replace(/_/g, " ")}</option>)}</select></label>}
-        {!!verdicts.length && <label><span className="v2-sr-only">Verdict</span><select value={verdict} onChange={(event) => setVerdict(event.target.value)}><option value="all">All verdicts</option>{verdicts.map((value) => <option key={value}>{value}</option>)}</select></label>}
-        {(search || actor !== "all" || kind !== "all" || verdict !== "all") && <button type="button" className="v2-text-button" onClick={() => { setSearch(""); setActor("all"); setKind("all"); setVerdict("all"); }}>Clear</button>}
+      <div className="dashboard-filterbar">
+        <label className="dashboard-search"><span className="dashboard-sr-only">Search events</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={`Search ${view === "activity" ? "activity" : "raw events"}`} /></label>
+        {actors.length > 1 && <label><span className="dashboard-sr-only">Actor</span><select value={actor} onChange={(event) => setActor(event.target.value)}><option value="all">All actors</option>{actors.map((value) => <option key={value}>{value}</option>)}</select></label>}
+        {kinds.length > 1 && <label><span className="dashboard-sr-only">Event type</span><select value={kind} onChange={(event) => setKind(event.target.value)}><option value="all">All event types</option>{kinds.map((value) => <option key={value}>{value.replace(/_/g, " ")}</option>)}</select></label>}
+        {!!verdicts.length && <label><span className="dashboard-sr-only">Verdict</span><select value={verdict} onChange={(event) => setVerdict(event.target.value)}><option value="all">All verdicts</option>{verdicts.map((value) => <option key={value}>{value}</option>)}</select></label>}
+        {(search || actor !== "all" || kind !== "all" || verdict !== "all") && <button type="button" className="dashboard-text-button" onClick={() => { setSearch(""); setActor("all"); setKind("all"); setVerdict("all"); }}>Clear</button>}
       </div>
-      <div className="v2-timeline" ref={bodyRef} onScroll={(event) => {
+      <div className="dashboard-timeline" ref={bodyRef} onScroll={(event) => {
         const node = event.currentTarget;
         if (node.scrollHeight - node.scrollTop - node.clientHeight > 24 && liveTail) setLiveTail(false);
       }}>
@@ -400,12 +400,12 @@ function Timeline({ events, rawEvents, selected, onSelect, liveTail, setLiveTail
         {filtered.map((event) => <button
           type="button"
           key={event.id}
-          className={`v2-event-row v2-actor-${actorLabel(event).toLowerCase()} ${selected?.id === event.id ? "selected" : ""}`}
+          className={`dashboard-event-row dashboard-actor-${actorLabel(event).toLowerCase()} ${selected?.id === event.id ? "selected" : ""}`}
           onClick={() => onSelect(event)}
         >
-          <time className="v2-mono" dateTime={event.timestamp}>{formatTime(event.timestamp)}</time>
-          <span className="v2-event-actor"><i aria-hidden="true">●</i>{actorLabel(event)}</span>
-          <span className="v2-event-copy">
+          <time className="dashboard-mono" dateTime={event.timestamp}>{formatTime(event.timestamp)}</time>
+          <span className="dashboard-event-actor"><i aria-hidden="true">●</i>{actorLabel(event)}</span>
+          <span className="dashboard-event-copy">
             <span><strong>{event.kind.replace(/_/g, " ")}</strong>{event.verdict && <VerdictBadge verdict={event.verdict} />}</span>
             <span title={event.text || eventTitle(event)}>{event.text || eventTitle(event)}</span>
             <small>{eventMeta(event)}<i>#{event.sequence}</i></small>
@@ -422,18 +422,18 @@ function AttackerSwitcher({ execution, onRefresh }: { execution: ExecutionSummar
   const [model, setModel] = useState("");
   const [status, setStatus] = useState("");
   const [working, setWorking] = useState(false);
-  useEffect(() => { v2Api.providers().then((items) => setProviders(items.map((item) => ({ name: item.name })))).catch(() => setProviders([])); }, []);
+  useEffect(() => { api.providers().then((items) => setProviders(items.map((item) => ({ name: item.name })))).catch(() => setProviders([])); }, []);
   const submit = async () => {
     if (!provider || !model.trim()) return;
     setWorking(true); setStatus("");
     try {
-      await v2Api.switchAttacker(execution, { provider, model: model.trim() });
+      await api.switchAttacker(execution, { provider, model: model.trim() });
       setStatus("Attacker switched; the conversation context is preserved.");
       onRefresh();
     } catch (reason) { setStatus(reason instanceof Error ? reason.message : "Unable to switch attacker"); }
     finally { setWorking(false); }
   };
-  return <section className="v2-attacker-switch" aria-label="Switch attacker while paused"><strong>Hot-switch attacker</strong><select aria-label="Attacker provider" value={provider} onChange={(event) => setProvider(event.target.value)}><option value="">Provider</option>{providers.map((item) => <option key={item.name}>{item.name}</option>)}</select><input aria-label="Attacker model" value={model} onChange={(event) => setModel(event.target.value)} placeholder="Model ID" /><button type="button" className="v2-button v2-button-small" disabled={working || !provider || !model.trim()} onClick={submit}>{working ? "Switching" : "Switch"}</button>{status && <span role="status">{status}</span>}</section>;
+  return <section className="dashboard-attacker-switch" aria-label="Switch attacker while paused"><strong>Hot-switch attacker</strong><select aria-label="Attacker provider" value={provider} onChange={(event) => setProvider(event.target.value)}><option value="">Provider</option>{providers.map((item) => <option key={item.name}>{item.name}</option>)}</select><input aria-label="Attacker model" value={model} onChange={(event) => setModel(event.target.value)} placeholder="Model ID" /><button type="button" className="dashboard-button dashboard-button-small" disabled={working || !provider || !model.trim()} onClick={submit}>{working ? "Switching" : "Switch"}</button>{status && <span role="status">{status}</span>}</section>;
 }
 
 function RunStrip({ execution, onRefresh }: { execution: ExecutionSummary | null; onRefresh: () => void }) {
@@ -445,9 +445,9 @@ function RunStrip({ execution, onRefresh }: { execution: ExecutionSummary | null
     setWorking(true);
     setError("");
     try {
-      if (action === "pause") await v2Api.pause(execution);
-      if (action === "resume") await v2Api.resume(execution);
-      if (action === "cancel") await v2Api.cancel(execution);
+      if (action === "pause") await api.pause(execution);
+      if (action === "resume") await api.resume(execution);
+      if (action === "cancel") await api.cancel(execution);
       onRefresh();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Control action failed");
@@ -457,17 +457,17 @@ function RunStrip({ execution, onRefresh }: { execution: ExecutionSummary | null
   };
   const progress = execution?.max_rounds ? Math.min(100, ((execution.current_round || 0) / execution.max_rounds) * 100) : 0;
   return <>
-    <header className="v2-run-strip">
-      <div className="v2-strip-field"><span>Target</span><strong>{execution?.target || "No active target"}</strong></div>
-      <div className="v2-strip-field"><span>Attacker</span><strong>{execution?.attacker || "--"}</strong></div>
-      <div className="v2-strip-field"><span>Judge</span><strong>{execution?.judge || "--"}</strong></div>
-      <div className="v2-strip-progress"><span>Round {execution?.current_round ?? "--"} of {execution?.max_rounds ?? "--"}</span><div><i style={{ width: `${progress}%` }} /></div></div>
-      <div className="v2-strip-field"><span>Elapsed</span><strong>{formatDuration(execution?.elapsed_ms)}</strong></div>
-      <div className="v2-strip-field"><span>Tokens in / out</span><strong>{formatTokens(execution?.input_tokens, execution?.output_tokens)}</strong></div>
-      <div className="v2-strip-state"><span>Connection</span>{execution ? <StatusBadge status={execution.status} /> : <span className="v2-muted">● Offline</span>}</div>
-      <div className="v2-strip-actions">
-        {execution?.status === "paused" ? <button type="button" className="v2-button" disabled={working} onClick={() => act("resume")}>Resume</button> : <button type="button" className="v2-button" disabled={working || !execution || execution.status !== "running"} onClick={() => act("pause")}>Pause</button>}
-        <button type="button" className="v2-button v2-button-danger" disabled={working || !execution || !["running", "paused", "pausing", "queued"].includes(execution.status)} onClick={() => act("cancel")}>Stop run</button>
+    <header className="dashboard-run-strip">
+      <div className="dashboard-strip-field"><span>Target</span><strong>{execution?.target || "No active target"}</strong></div>
+      <div className="dashboard-strip-field"><span>Attacker</span><strong>{execution?.attacker || "--"}</strong></div>
+      <div className="dashboard-strip-field"><span>Judge</span><strong>{execution?.judge || "--"}</strong></div>
+      <div className="dashboard-strip-progress"><span>Round {execution?.current_round ?? "--"} of {execution?.max_rounds ?? "--"}</span><div><i style={{ width: `${progress}%` }} /></div></div>
+      <div className="dashboard-strip-field"><span>Elapsed</span><strong>{formatDuration(execution?.elapsed_ms)}</strong></div>
+      <div className="dashboard-strip-field"><span>Tokens in / out</span><strong>{formatTokens(execution?.input_tokens, execution?.output_tokens)}</strong></div>
+      <div className="dashboard-strip-state"><span>Connection</span>{execution ? <StatusBadge status={execution.status} /> : <span className="dashboard-muted">● Offline</span>}</div>
+      <div className="dashboard-strip-actions">
+        {execution?.status === "paused" ? <button type="button" className="dashboard-button" disabled={working} onClick={() => act("resume")}>Resume</button> : <button type="button" className="dashboard-button" disabled={working || !execution || execution.status !== "running"} onClick={() => act("pause")}>Pause</button>}
+        <button type="button" className="dashboard-button dashboard-button-danger" disabled={working || !execution || !["running", "paused", "pausing", "queued"].includes(execution.status)} onClick={() => act("cancel")}>Stop run</button>
       </div>
     </header>
     {error && <ErrorBanner message={error} onDismiss={() => setError("")} />}
@@ -484,7 +484,7 @@ function RunLauncher({ execution, onRefresh, onStarted }: { execution: Execution
   const [jefBehavior, setJefBehavior] = useState("");
   const [techniques, setTechniques] = useState<TechniqueChoice[]>([]);
   const [selected, setSelected] = useState<string[] | null>(() => {
-    try { return JSON.parse(localStorage.getItem("wallbreaker:v2:techniques") || "null") as string[] | null; }
+    try { return JSON.parse(localStorage.getItem("wallbreaker:dashboard:techniques") || "null") as string[] | null; }
     catch { return null; }
   });
   const [techniqueSearch, setTechniqueSearch] = useState("");
@@ -494,8 +494,8 @@ function RunLauncher({ execution, onRefresh, onStarted }: { execution: Execution
   const [launcherOpen, setLauncherOpen] = useState(!execution);
   useEffect(() => { if (execution) setMessage(""); }, [execution?.id]);
   useEffect(() => { setLauncherOpen(!execution); }, [execution?.id]);
-  useEffect(() => { v2Api.tools().then((items) => setTechniques(items.filter((item) => !item.control).map((item) => ({ name: String(item.name || ""), description: typeof item.description === "string" ? item.description : undefined, control: Boolean(item.control) })).filter((item) => item.name))).catch(() => setTechniques([])); }, []);
-  useEffect(() => { localStorage.setItem("wallbreaker:v2:techniques", JSON.stringify(selected)); }, [selected]);
+  useEffect(() => { api.tools().then((items) => setTechniques(items.filter((item) => !item.control).map((item) => ({ name: String(item.name || ""), description: typeof item.description === "string" ? item.description : undefined, control: Boolean(item.control) })).filter((item) => item.name))).catch(() => setTechniques([])); }, []);
+  useEffect(() => { localStorage.setItem("wallbreaker:dashboard:techniques", JSON.stringify(selected)); }, [selected]);
   const visibleTechniques = useMemo(() => {
     const query = techniqueSearch.trim().toLowerCase();
     return techniques.filter((item) => !query || `${item.name} ${item.description || ""}`.toLowerCase().includes(query));
@@ -505,7 +505,7 @@ function RunLauncher({ execution, onRefresh, onStarted }: { execution: Execution
     if (!objective.trim() || active) return;
     setWorking(true); setMessage("");
     try {
-      const created = await v2Api.createExecution("agent.run", {
+      const created = await api.createExecution("agent.run", {
         objective: objective.trim(), max_rounds: maxRounds, max_tokens: maxTokens,
         concurrency, request_delay_ms: requestDelay,
         ...(jefBehavior ? { jef_behavior: jefBehavior } : {}),
@@ -518,38 +518,38 @@ function RunLauncher({ execution, onRefresh, onStarted }: { execution: Execution
     finally { setWorking(false); }
   };
   const techniqueSummary = selected == null ? `All ${techniques.length || ""} techniques`.trim() : `${selected.length} techniques`;
-  return <details className="v2-agent-launch" open={launcherOpen} onToggle={(event) => setLauncherOpen(event.currentTarget.open)}>
+  return <details className="dashboard-agent-launch" open={launcherOpen} onToggle={(event) => setLauncherOpen(event.currentTarget.open)}>
     <summary><span><strong>{active ? "Current engagement" : "New engagement"}</strong><small>{active ? "Launch controls are available when this run ends" : "Set the objective, then start the agent loop"}</small></span><span>{active ? "In progress" : "Ready"}</span></summary>
-    <div className="v2-agent-launch-body">
-      <div className="v2-agent-launch-primary">
-        <label className="v2-field v2-agent-objective"><span>Objective</span><textarea value={objective} onChange={(event) => setObjective(event.target.value)} placeholder="Describe the authorized evaluation objective" /></label>
+    <div className="dashboard-agent-launch-body">
+      <div className="dashboard-agent-launch-primary">
+        <label className="dashboard-field dashboard-agent-objective"><span>Objective</span><textarea value={objective} onChange={(event) => setObjective(event.target.value)} placeholder="Describe the authorized evaluation objective" /></label>
         <JEFBehaviorPicker value={jefBehavior} onChange={setJefBehavior} disabled={Boolean(active)} />
-        <button type="button" className="v2-button v2-button-primary" disabled={working || !objective.trim() || Boolean(active)} onClick={start}>{working ? "Starting" : "Start loop"}</button>
+        <button type="button" className="dashboard-button dashboard-button-primary" disabled={working || !objective.trim() || Boolean(active)} onClick={start}>{working ? "Starting" : "Start loop"}</button>
       </div>
-      <details className="v2-agent-advanced">
+      <details className="dashboard-agent-advanced">
         <summary><span><i aria-hidden="true">⌄</i><strong>Run settings</strong><small>Configure limits and technique access</small></span><span>{maxRounds} rounds · {maxTokens.toLocaleString()} tokens · {concurrency} concurrent · {requestDelay} ms · {techniqueSummary}</span></summary>
-        <div className="v2-agent-advanced-body">
-          <div className="v2-form-grid">
-            <label className="v2-field"><span>Maximum rounds</span><input type="number" min={1} max={50} value={maxRounds} onChange={(event) => setMaxRounds(Number(event.target.value))} /></label>
-            <label className="v2-field"><span>Maximum tokens</span><input type="number" min={1} max={32000} value={maxTokens} onChange={(event) => setMaxTokens(Number(event.target.value))} /></label>
-            <label className="v2-field"><span>Concurrency</span><input type="number" min={1} max={32} value={concurrency} onChange={(event) => setConcurrency(Number(event.target.value))} /></label>
-            <label className="v2-field"><span>Request delay (ms)</span><input type="number" min={0} max={60000} value={requestDelay} onChange={(event) => setRequestDelay(Number(event.target.value))} /></label>
+        <div className="dashboard-agent-advanced-body">
+          <div className="dashboard-form-grid">
+            <label className="dashboard-field"><span>Maximum rounds</span><input type="number" min={1} max={50} value={maxRounds} onChange={(event) => setMaxRounds(Number(event.target.value))} /></label>
+            <label className="dashboard-field"><span>Maximum tokens</span><input type="number" min={1} max={32000} value={maxTokens} onChange={(event) => setMaxTokens(Number(event.target.value))} /></label>
+            <label className="dashboard-field"><span>Concurrency</span><input type="number" min={1} max={32} value={concurrency} onChange={(event) => setConcurrency(Number(event.target.value))} /></label>
+            <label className="dashboard-field"><span>Request delay (ms)</span><input type="number" min={0} max={60000} value={requestDelay} onChange={(event) => setRequestDelay(Number(event.target.value))} /></label>
           </div>
-          <div className="v2-technique-picker">
-        <button type="button" className={`v2-technique-trigger ${techniquePickerOpen ? "open" : ""}`} aria-haspopup="dialog" aria-expanded={techniquePickerOpen} onClick={() => setTechniquePickerOpen((open) => !open)}>
+          <div className="dashboard-technique-picker">
+        <button type="button" className={`dashboard-technique-trigger ${techniquePickerOpen ? "open" : ""}`} aria-haspopup="dialog" aria-expanded={techniquePickerOpen} onClick={() => setTechniquePickerOpen((open) => !open)}>
           <span>Technique access</span><strong>{selected == null ? `All ${techniques.length}` : `${selected.length} of ${techniques.length}`}</strong><i aria-hidden="true">⌄</i>
         </button>
-        {selected != null && <div className="v2-technique-chips" aria-label="Selected techniques">{selected.slice(0, 5).map((name) => <button type="button" key={name} title={`Remove ${name}`} onClick={() => setSelected((current) => current?.filter((item) => item !== name) || [])}>{name}<span aria-hidden="true">×</span></button>)}{selected.length > 5 && <span>+{selected.length - 5}</span>}</div>}
-        {techniquePickerOpen && <div className="v2-technique-popover" role="dialog" aria-label="Choose technique access" onKeyDown={(event) => { if (event.key === "Escape") setTechniquePickerOpen(false); }}>
+        {selected != null && <div className="dashboard-technique-chips" aria-label="Selected techniques">{selected.slice(0, 5).map((name) => <button type="button" key={name} title={`Remove ${name}`} onClick={() => setSelected((current) => current?.filter((item) => item !== name) || [])}>{name}<span aria-hidden="true">×</span></button>)}{selected.length > 5 && <span>+{selected.length - 5}</span>}</div>}
+        {techniquePickerOpen && <div className="dashboard-technique-popover" role="dialog" aria-label="Choose technique access" onKeyDown={(event) => { if (event.key === "Escape") setTechniquePickerOpen(false); }}>
           <header><div><strong>Technique access</strong><span>{selected == null ? "All capabilities enabled" : `${selected.length} selected`}</span></div><button type="button" aria-label="Close technique picker" onClick={() => setTechniquePickerOpen(false)}>×</button></header>
-          <div className="v2-technique-search"><input autoFocus aria-label="Search techniques" value={techniqueSearch} onChange={(event) => setTechniqueSearch(event.target.value)} placeholder="Search tools and techniques" /><button type="button" onClick={() => setSelected(null)}>All</button><button type="button" onClick={() => setSelected([])}>None</button></div>
-          <div className="v2-technique-list">{visibleTechniques.map((item) => <label key={item.name} title={item.description || "Registered capability"}><input type="checkbox" checked={selected == null || selected.includes(item.name)} onChange={(event) => setSelected((current) => { const base = current == null ? techniques.map((entry) => entry.name) : current; return event.target.checked ? [...new Set([...base, item.name])] : base.filter((name) => name !== item.name); })} /><span><strong>{item.name}</strong><small>{item.description || "Registered capability"}</small></span></label>)}</div>
-          <footer><span>{visibleTechniques.length} shown</span><button type="button" className="v2-button v2-button-small" onClick={() => setTechniquePickerOpen(false)}>Done</button></footer>
+          <div className="dashboard-technique-search"><input autoFocus aria-label="Search techniques" value={techniqueSearch} onChange={(event) => setTechniqueSearch(event.target.value)} placeholder="Search tools and techniques" /><button type="button" onClick={() => setSelected(null)}>All</button><button type="button" onClick={() => setSelected([])}>None</button></div>
+          <div className="dashboard-technique-list">{visibleTechniques.map((item) => <label key={item.name} title={item.description || "Registered capability"}><input type="checkbox" checked={selected == null || selected.includes(item.name)} onChange={(event) => setSelected((current) => { const base = current == null ? techniques.map((entry) => entry.name) : current; return event.target.checked ? [...new Set([...base, item.name])] : base.filter((name) => name !== item.name); })} /><span><strong>{item.name}</strong><small>{item.description || "Registered capability"}</small></span></label>)}</div>
+          <footer><span>{visibleTechniques.length} shown</span><button type="button" className="dashboard-button dashboard-button-small" onClick={() => setTechniquePickerOpen(false)}>Done</button></footer>
         </div>}
           </div>
         </div>
       </details>
-      {message && <span className="v2-inline-status" role="status">{message}</span>}
+      {message && <span className="dashboard-inline-status" role="status">{message}</span>}
     </div>
   </details>;
 }
@@ -563,7 +563,7 @@ function SteeringBar({ execution, onContinued }: { execution: ExecutionSummary |
     setSending(true);
     setStatus("");
     try {
-      const result = await v2Api.steer(execution, message.trim());
+      const result = await api.steer(execution, message.trim());
       setMessage("");
       if (result.execution && result.continued) {
         onContinued(result.execution);
@@ -576,13 +576,13 @@ function SteeringBar({ execution, onContinued }: { execution: ExecutionSummary |
     } finally { setSending(false); }
   };
   return (
-    <section className="v2-steer" aria-label="Steer the attacker">
-      <div className="v2-steer-head"><strong>Steer the attacker</strong><span>{execution?.status === "succeeded" ? "Continue this completed engagement" : execution?.current_round ? `Round ${execution.current_round}` : execution ? "Waiting for the first round" : "Available when the loop starts"}</span>{status && <span role="status">{status}</span>}</div>
-      <div className="v2-steer-row">
-        <label><span className="v2-sr-only">Steering message</span><textarea value={message} onChange={(event) => setMessage(event.target.value)} onKeyDown={(event) => {
+    <section className="dashboard-steer" aria-label="Steer the attacker">
+      <div className="dashboard-steer-head"><strong>Steer the attacker</strong><span>{execution?.status === "succeeded" ? "Continue this completed engagement" : execution?.current_round ? `Round ${execution.current_round}` : execution ? "Waiting for the first round" : "Available when the loop starts"}</span>{status && <span role="status">{status}</span>}</div>
+      <div className="dashboard-steer-row">
+        <label><span className="dashboard-sr-only">Steering message</span><textarea value={message} onChange={(event) => setMessage(event.target.value)} onKeyDown={(event) => {
           if ((event.ctrlKey || event.metaKey) && event.key === "Enter") { event.preventDefault(); submit(); }
         }} placeholder={execution?.status === "succeeded" ? "Continue this engagement with a new instruction. Ctrl Enter sends." : execution ? "Steer or command the attacker. Ctrl Enter sends." : "Draft steering guidance here; it can be sent after the loop starts."} /></label>
-        <button type="button" className="v2-button v2-button-primary" disabled={!execution || !message.trim() || sending} onClick={submit}>{sending ? "Sending" : "Send"}</button>
+        <button type="button" className="dashboard-button dashboard-button-primary" disabled={!execution || !message.trim() || sending} onClick={submit}>{sending ? "Sending" : "Send"}</button>
       </div>
     </section>
   );
@@ -659,22 +659,22 @@ function AgentLoop({ execution, events, streamState, configuredRoles }: { execut
   ];
   const latestFor = (role: string) => [...loopEvents].reverse().find((event) => actorLabel(event).toLowerCase() === role);
 
-  return <section className="v2-agent-loop" aria-label="Attack target judge loop">
-    <div className="v2-loop-roles">
+  return <section className="dashboard-agent-loop" aria-label="Attack target judge loop">
+    <div className="dashboard-loop-roles">
       {roles.map((role, index) => {
         const roleEvent = latestFor(role.id);
         const isCurrent = active && latest && actorLabel(latest).toLowerCase() === role.id;
-        return <article key={role.id} className={`v2-loop-role v2-loop-role-${role.id} ${isCurrent ? "active" : ""}`}>
+        return <article key={role.id} className={`dashboard-loop-role dashboard-loop-role-${role.id} ${isCurrent ? "active" : ""}`}>
           <header><span>{String(index + 1).padStart(2, "0")}</span><strong>{role.label}</strong><i>{isCurrent ? "Active" : roleEvent ? formatTime(roleEvent.timestamp) : "Waiting"}</i></header>
           <b title={role.model}>{role.model}</b>
           <p>{roleEvent ? eventTitle(roleEvent) : role.detail}</p>
         </article>;
       })}
     </div>
-    <div className="v2-loop-exchange-head"><strong>Conversation stream</strong><span>{loopEvents.length} exchanges{execution?.current_round ? ` · round ${execution.current_round}` : ""}</span><i>{execution ? <StatusBadge status={execution.status} /> : <span className="v2-status">● Idle</span>}<small>{execution ? `stream ${streamState}` : "awaiting objective"}</small></i></div>
-    <ol className="v2-loop-feed" aria-label="Agent conversation stream">
-      {!execution && <li className="v2-loop-empty"><EmptyState title="No active agent loop" detail="Enter an objective above to begin an attack → target → judge engagement." /></li>}
-      {execution && !loopEvents.length && <li className="v2-loop-empty"><EmptyState title="Waiting for the first exchange" detail="Messages, target responses, tool actions, and judge verdicts will appear here in order." /></li>}
+    <div className="dashboard-loop-exchange-head"><strong>Conversation stream</strong><span>{loopEvents.length} exchanges{execution?.current_round ? ` · round ${execution.current_round}` : ""}</span><i>{execution ? <StatusBadge status={execution.status} /> : <span className="dashboard-status">● Idle</span>}<small>{execution ? `stream ${streamState}` : "awaiting objective"}</small></i></div>
+    <ol className="dashboard-loop-feed" aria-label="Agent conversation stream">
+      {!execution && <li className="dashboard-loop-empty"><EmptyState title="No active agent loop" detail="Enter an objective above to begin an attack → target → judge engagement." /></li>}
+      {execution && !loopEvents.length && <li className="dashboard-loop-empty"><EmptyState title="Waiting for the first exchange" detail="Messages, target responses, tool actions, and judge verdicts will appear here in order." /></li>}
       {loopEvents.map((event) => {
         const actor = actorLabel(event);
         const copy = event.text || eventTitle(event);
@@ -682,15 +682,15 @@ function AgentLoop({ execution, events, streamState, configuredRoles }: { execut
         const transcript = event.text?.trim() || "";
         const evaluation = jefEvaluation(event);
         const toolArgs = event.kind === "tool_call" ? event.data?.args ?? event.data?.arguments : undefined;
-        return <li key={event.id} className={`v2-loop-event v2-loop-event-${actor.toLowerCase()}`}>
-          <div className="v2-loop-event-summary">
-            <span className="v2-loop-event-marker" aria-hidden="true">●</span>
-            <span className="v2-loop-event-who"><strong>{actor}</strong><small>{event.round ? `Round ${event.round}` : formatTime(event.timestamp)}</small></span>
-            <span className="v2-loop-event-copy"><strong>{event.kind.replace(/_/g, " ")}</strong>{compactKind && <span title={copy}>{copy}</span>}</span>
-            {event.verdict ? <VerdictBadge verdict={event.verdict} /> : <span className="v2-loop-event-time">{formatTime(event.timestamp)}</span>}
+        return <li key={event.id} className={`dashboard-loop-event dashboard-loop-event-${actor.toLowerCase()}`}>
+          <div className="dashboard-loop-event-summary">
+            <span className="dashboard-loop-event-marker" aria-hidden="true">●</span>
+            <span className="dashboard-loop-event-who"><strong>{actor}</strong><small>{event.round ? `Round ${event.round}` : formatTime(event.timestamp)}</small></span>
+            <span className="dashboard-loop-event-copy"><strong>{event.kind.replace(/_/g, " ")}</strong>{compactKind && <span title={copy}>{copy}</span>}</span>
+            {event.verdict ? <VerdictBadge verdict={event.verdict} /> : <span className="dashboard-loop-event-time">{formatTime(event.timestamp)}</span>}
           </div>
-          {!compactKind && <div className="v2-loop-event-detail">
-            {evaluation ? <JEFResult evaluation={evaluation} /> : event.kind === "tool_call" ? <div className="v2-loop-tool-call"><strong>{eventTitle(event)}</strong>{hasValue(toolArgs) && <JsonBlock value={toolArgs} empty="This tool call has no arguments." />}</div> : transcript ? <p>{transcript}</p> : <p>{copy}</p>}
+          {!compactKind && <div className="dashboard-loop-event-detail">
+            {evaluation ? <JEFResult evaluation={evaluation} /> : event.kind === "tool_call" ? <div className="dashboard-loop-tool-call"><strong>{eventTitle(event)}</strong>{hasValue(toolArgs) && <JsonBlock value={toolArgs} empty="This tool call has no arguments." />}</div> : transcript ? <p>{transcript}</p> : <p>{copy}</p>}
             <span>{eventMeta(event) || `Event #${event.sequence}`}</span>
             {hasValue(event.data) && <details><summary>Raw event data</summary><JsonBlock value={event.data} /></details>}
           </div>}
@@ -702,7 +702,7 @@ function AgentLoop({ execution, events, streamState, configuredRoles }: { execut
 
 export function AgentView({ execution, enabled = true, onRefresh, onStarted, configuredRoles }: { execution: ExecutionSummary | null; enabled?: boolean; onRefresh: () => void; onStarted: (execution: ExecutionSummary) => void; configuredRoles?: RoleAssignments | null }) {
   const { events, streamState } = useExecutionEvents(execution, enabled);
-  return <div className="v2-agent">
+  return <div className="dashboard-agent">
     <RunStrip execution={execution} onRefresh={onRefresh} />
     <RunLauncher execution={execution} onRefresh={onRefresh} onStarted={onStarted} />
     <AgentLoop execution={execution} events={events} streamState={streamState} configuredRoles={configuredRoles} />
@@ -734,7 +734,7 @@ export function LiveView({ execution, enabled = true }: { execution: ExecutionSu
 
   useEffect(() => {
     if (!enabled) return;
-    v2Api.historyRuns(1000).then((payload) => {
+    api.historyRuns(1000).then((payload) => {
       const runs = payload.items.map((row) => ({
         run_name: String(row.run_name || ""),
         first_timestamp: String(row.first_timestamp || ""),
@@ -765,10 +765,10 @@ export function LiveView({ execution, enabled = true }: { execution: ExecutionSu
   }, [activityEvents, liveTail]);
 
   return (
-    <div className="v2-live v2-live-dashboard">
+    <div className="dashboard-live dashboard-live-dashboard">
       <LiveRunSelector execution={execution} runs={historicalRuns} selectedRun={historicalRun} onSelect={setHistoricalRun} />
-      <div className="v2-live-grid">
-        <main className="v2-observatory">
+      <div className="dashboard-live-grid">
+        <main className="dashboard-observatory">
           <RunOverview events={activityEvents} selected={selected} onSelect={setSelected} execution={selectedExecution} streamState={streamState} />
           <Timeline events={activityEvents} rawEvents={rawEvents} selected={selected} onSelect={setSelected} liveTail={liveTail} setLiveTail={setLiveTail} unread={unread} markRead={() => { setUnread(0); setLiveTail(true); }} />
         </main>

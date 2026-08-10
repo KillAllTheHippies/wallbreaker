@@ -81,7 +81,7 @@ class Capability:
         object.__setattr__(self, "aliases", tuple(self.aliases))
 
     def to_dict(self) -> dict[str, Any]:
-        """Serialize this record for the V2 capabilities endpoint."""
+        """Serialize this record for the dashboard capabilities endpoint."""
 
         return {
             "id": self.id,
@@ -398,7 +398,7 @@ def group_capabilities(
 def serialize_capabilities(
     capabilities: Iterable[Capability] = TUI_CAPABILITIES,
 ) -> dict[str, Any]:
-    """Build the JSON-ready payload for ``GET /api/v2/capabilities``."""
+    """Build the JSON-ready payload for ``GET /api/capabilities``."""
 
     items = tuple(capabilities)
     groups = group_capabilities(items)

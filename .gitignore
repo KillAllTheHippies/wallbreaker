@@ -36,6 +36,8 @@ awesome-osint-arsenal/
 
 # loose working jailbreak drafts, seeds & scraped research (never publish)
 .firecrawl/
+analysis/
+payloads/
 wb_seeds/
 wb_universal/
 casefile_*.md

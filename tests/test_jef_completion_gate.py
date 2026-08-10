@@ -256,7 +256,7 @@ async def test_unavailable_jef_result_does_not_report_success(monkeypatch):
     assert "JEF test unavailable" in feedback
 
 
-def test_findings_return_jef_metadata_and_v2_renders_compact_indicator(tmp_path):
+def test_findings_return_jef_metadata_and_dashboard_renders_compact_indicator(tmp_path):
     sessions = tmp_path / "sessions"
     log = RunLog(directory=sessions)
     jef_result = evaluation("harry_potter", 82, 80)
@@ -275,7 +275,7 @@ def test_findings_return_jef_metadata_and_v2_renders_compact_indicator(tmp_path)
     assert jef_finding["jef_evaluation"]["threshold"] == 80
     assert "jef_behavior" not in non_jef and "jef_evaluation" not in non_jef
 
-    source = (Path(__file__).parents[1] / "wallbreaker/dashboard/web/src/v2/Views.tsx").read_text()
+    source = (Path(__file__).parents[1] / "wallbreaker/dashboard/web/src/dashboard/Views.tsx").read_text()
     assert "<VerdictBadge verdict={item.label} /><JEFIndicator" in source
     assert "behavior={item.jef_behavior} evaluation={item.jef_evaluation}" in source
 

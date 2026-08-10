@@ -4,7 +4,7 @@ import type { EventEnvelope, ExecutionStatus } from "./types";
 export function StatusBadge({ status }: { status: ExecutionStatus | string }) {
   const normalized = status.toLowerCase();
   return (
-    <span className={`v2-status v2-status-${normalized}`}>
+    <span className={`dashboard-status dashboard-status-${normalized}`}>
       <span aria-hidden="true">●</span>
       {status.replace(/_/g, " ")}
     </span>
@@ -12,9 +12,9 @@ export function StatusBadge({ status }: { status: ExecutionStatus | string }) {
 }
 
 export function VerdictBadge({ verdict }: { verdict?: string }) {
-  if (!verdict) return <span className="v2-muted">Not judged</span>;
+  if (!verdict) return <span className="dashboard-muted">Not judged</span>;
   const normalized = verdict.toLowerCase().replace(/[^a-z0-9]+/g, "-");
-  return <span className={`v2-verdict v2-verdict-${normalized}`}>{verdict}</span>;
+  return <span className={`dashboard-verdict dashboard-verdict-${normalized}`}>{verdict}</span>;
 }
 
 export function JEFIndicator({ behavior, evaluation }: { behavior?: string; evaluation?: { percentage?: number; threshold?: number; status?: string; title?: string } }) {
@@ -23,7 +23,7 @@ export function JEFIndicator({ behavior, evaluation }: { behavior?: string; eval
   const threshold = typeof evaluation?.threshold === "number" ? evaluation.threshold : null;
   const passed = score != null && threshold != null && score >= threshold;
   const result = score == null ? "unavailable" : `${score}%${threshold == null ? "" : `/${threshold}%`}`;
-  return <span className={`v2-jef-indicator ${passed ? "pass" : "fail"}`} title={`${evaluation?.title || behavior || "JEF behavior"}: ${result}`}>JEF {result}</span>;
+  return <span className={`dashboard-jef-indicator ${passed ? "pass" : "fail"}`} title={`${evaluation?.title || behavior || "JEF behavior"}: ${result}`}>JEF {result}</span>;
 }
 
 export function Panel({
@@ -40,13 +40,13 @@ export function Panel({
   children: ReactNode;
 }) {
   return (
-    <section className={`v2-panel ${className}`}>
-      <header className="v2-panel-header">
-        <div className="v2-panel-title">
+    <section className={`dashboard-panel ${className}`}>
+      <header className="dashboard-panel-header">
+        <div className="dashboard-panel-title">
           <h2>{title}</h2>
           {meta && <span>{meta}</span>}
         </div>
-        {actions && <div className="v2-panel-actions">{actions}</div>}
+        {actions && <div className="dashboard-panel-actions">{actions}</div>}
       </header>
       {children}
     </section>
@@ -55,7 +55,7 @@ export function Panel({
 
 export function EmptyState({ title, detail }: { title: string; detail?: string }) {
   return (
-    <div className="v2-empty" role="status">
+    <div className="dashboard-empty" role="status">
       <strong>{title}</strong>
       {detail && <span>{detail}</span>}
     </div>
@@ -63,15 +63,15 @@ export function EmptyState({ title, detail }: { title: string; detail?: string }
 }
 
 export function LoadingState({ label = "Loading" }: { label?: string }) {
-  return <div className="v2-loading" role="status"><span aria-hidden="true">●</span>{label}</div>;
+  return <div className="dashboard-loading" role="status"><span aria-hidden="true">●</span>{label}</div>;
 }
 
 export function ErrorBanner({ message, onDismiss }: { message: string; onDismiss?: () => void }) {
   return (
-    <div className="v2-error" role="alert">
+    <div className="dashboard-error" role="alert">
       <strong>Request failed</strong>
       <span>{message}</span>
-      {onDismiss && <button type="button" className="v2-text-button" onClick={onDismiss}>Dismiss</button>}
+      {onDismiss && <button type="button" className="dashboard-text-button" onClick={onDismiss}>Dismiss</button>}
     </div>
   );
 }
@@ -79,7 +79,7 @@ export function ErrorBanner({ message, onDismiss }: { message: string; onDismiss
 export function JsonBlock({ value, empty = "No structured data recorded." }: { value: unknown; empty?: string }) {
   if (value == null || value === "") return <EmptyState title={empty} />;
   const content = typeof value === "string" ? value : JSON.stringify(value, null, 2);
-  return <pre className="v2-code">{content}</pre>;
+  return <pre className="dashboard-code">{content}</pre>;
 }
 
 export function formatTime(value?: string): string {

@@ -50,9 +50,9 @@ def test_behavior_selection_scores_only_the_model_response():
     assert result["missing"]
 
 
-def test_v2_jef_endpoint_is_display_only(tmp_path):
+def test_dashboard_jef_endpoint_is_display_only(tmp_path):
     client = TestClient(create_app(config=None, sessions_dir=tmp_path))
-    response = client.get("/api/v2/jef/behaviors")
+    response = client.get("/api/jef/behaviors")
     assert response.status_code == 200
     body = response.json()
     assert {row["id"] for row in body["behaviors"]} == set(JEF_BEHAVIOR_IDS)
@@ -62,7 +62,7 @@ def test_v2_jef_endpoint_is_display_only(tmp_path):
 def test_agent_run_rejects_unknown_jef_behavior(tmp_path):
     client = TestClient(create_app(config=None, sessions_dir=tmp_path))
     response = client.post(
-        "/api/v2/agent/run",
+        "/api/agent/run",
         json={"objective": "authorized evaluation", "jef_behavior": "unknown"},
     )
     assert response.status_code == 400
@@ -118,10 +118,10 @@ def test_compose_conversation_retains_jef_behavior_and_run_metadata(monkeypatch,
     client = TestClient(create_app(config=cfg, sessions_dir=sessions))
 
     first = client.post(
-        "/api/v2/fire", json={"request": "first", "jef_behavior": "harry_potter"}
+        "/api/fire", json={"request": "first", "jef_behavior": "harry_potter"}
     ).json()
-    second = client.post("/api/v2/fire", json={"request": "follow up"}).json()
-    state = client.get("/api/v2/console/conversation").json()
+    second = client.post("/api/fire", json={"request": "follow up"}).json()
+    state = client.get("/api/console/conversation").json()
 
     assert first["turn"]["jef_behavior"] == "harry_potter"
     assert first["turn"]["jef_evaluation"]["behavior"] == "harry_potter"
@@ -134,12 +134,12 @@ def test_compose_conversation_retains_jef_behavior_and_run_metadata(monkeypatch,
     }
     assert registries[0].calls[1][1]["prompt"] == "follow up"
     changed = client.post(
-        "/api/v2/fire", json={"request": "changed", "jef_behavior": "fentanyl"}
+        "/api/fire", json={"request": "changed", "jef_behavior": "fentanyl"}
     )
     assert changed.status_code == 400
     assert "locked" in changed.json()["detail"]
 
-    reset = client.post("/api/v2/console/conversation/reset").json()
+    reset = client.post("/api/console/conversation/reset").json()
     assert reset["jef_behavior"] == ""
     assert reset["retained_setup"] == state["opening"]
     assert reset["opening"] == {}
@@ -151,7 +151,7 @@ def test_compose_conversation_retains_jef_behavior_and_run_metadata(monkeypatch,
     assert run_meta["jef_behavior"] == "harry_potter"
 
 
-def test_agent_and_v2_execution_propagate_jef_behavior(monkeypatch, tmp_path):
+def test_agent_and_dashboard_execution_propagate_jef_behavior(monkeypatch, tmp_path):
     from wallbreaker.agent.messages import StopEvent, TextDelta, ToolUseEvent
     from wallbreaker.config import Config, Endpoint
     from wallbreaker.providers.base import Provider
@@ -195,7 +195,7 @@ def test_agent_and_v2_execution_propagate_jef_behavior(monkeypatch, tmp_path):
     monkeypatch.setattr(tools_mod, "build_registry", lambda _config: registry)
 
     with TestClient(create_app(config=cfg, sessions_dir=sessions)) as client:
-        with client.stream("POST", "/api/v2/agent/run", json={
+        with client.stream("POST", "/api/agent/run", json={
             "objective": "authorized objective",
             "max_rounds": 1,
             "jef_behavior": "chinese_censorship",
@@ -212,10 +212,10 @@ def test_agent_and_v2_execution_propagate_jef_behavior(monkeypatch, tmp_path):
         assert objective["jef_behavior"] == "chinese_censorship"
         assert scaffold["request"]["messages"][0]["content"][0]["text"] == "authorized objective"
 
-        created = client.post("/api/v2/executions", json={
+        created = client.post("/api/executions", json={
             "capability_id": "agent.run",
             "args": {
-                "objective": "V2 execution objective",
+                "objective": "dashboard execution objective",
                 "max_rounds": 1,
                 "jef_behavior": "fentanyl",
             },
@@ -224,7 +224,7 @@ def test_agent_and_v2_execution_propagate_jef_behavior(monkeypatch, tmp_path):
         assert created.status_code == 200
         execution_id = created.json()["id"]
         for _ in range(100):
-            execution = client.get(f"/api/v2/executions/{execution_id}").json()
+            execution = client.get(f"/api/executions/{execution_id}").json()
             if execution["status"] in {"succeeded", "failed", "cancelled"}:
                 break
             time.sleep(0.01)

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { Capability, V2Route } from "./types";
+import type { Capability, DashboardRoute } from "./types";
 
-const ROUTES: Array<{ id: V2Route; label: string; description: string }> = [
+const ROUTES: Array<{ id: DashboardRoute; label: string; description: string }> = [
   { id: "agent", label: "Agent", description: "Run and steer the attack-target-judge loop" },
   { id: "live", label: "Live", description: "Observe current and historical engagements" },
   { id: "compose", label: "Compose", description: "Build and inspect a payload" },
@@ -23,7 +23,7 @@ export function CommandPalette({
   open: boolean;
   capabilities: Capability[];
   onClose: () => void;
-  onNavigate: (route: V2Route) => void;
+  onNavigate: (route: DashboardRoute) => void;
   onCapability: (capability: Capability) => void;
 }) {
   const [query, setQuery] = useState("");
@@ -55,14 +55,14 @@ export function CommandPalette({
 
   if (!open) return null;
   return (
-    <div className="v2-palette-backdrop" role="presentation" onMouseDown={(event) => {
+    <div className="dashboard-palette-backdrop" role="presentation" onMouseDown={(event) => {
       if (event.target === event.currentTarget) onClose();
     }}>
-      <section className="v2-palette" role="dialog" aria-modal="true" aria-label="Command palette">
-        <div className="v2-palette-search">
-          <label htmlFor="v2-command-search">Command or capability</label>
+      <section className="dashboard-palette" role="dialog" aria-modal="true" aria-label="Command palette">
+        <div className="dashboard-palette-search">
+          <label htmlFor="dashboard-command-search">Command or capability</label>
           <input
-            id="v2-command-search"
+            id="dashboard-command-search"
             ref={inputRef}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
@@ -70,20 +70,20 @@ export function CommandPalette({
           />
           <kbd>Esc</kbd>
         </div>
-        <div className="v2-palette-results">
-          {routes.length > 0 && <div className="v2-palette-group">
+        <div className="dashboard-palette-results">
+          {routes.length > 0 && <div className="dashboard-palette-group">
             <h3>Navigate</h3>
             {routes.map((item) => <button type="button" key={item.id} onClick={() => onNavigate(item.id)}>
               <span>{item.label}</span><small>{item.description}</small>
             </button>)}
           </div>}
-          {matches.length > 0 && <div className="v2-palette-group">
+          {matches.length > 0 && <div className="dashboard-palette-group">
             <h3>Capabilities</h3>
             {matches.map((item) => <button type="button" key={item.id} onClick={() => onCapability(item)}>
               <span>{item.title}</span><small>{item.category}{item.execution_mode ? ` / ${item.execution_mode}` : ""}</small>
             </button>)}
           </div>}
-          {!routes.length && !matches.length && <div className="v2-empty"><strong>No matching command</strong></div>}
+          {!routes.length && !matches.length && <div className="dashboard-empty"><strong>No matching command</strong></div>}
         </div>
         <footer>Tip: press Ctrl K from anywhere to reopen this menu.</footer>
       </section>

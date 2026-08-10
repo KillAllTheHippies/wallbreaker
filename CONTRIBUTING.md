@@ -29,11 +29,11 @@ for the complete cross-platform setup and local development workflow.
 - `wallbreaker/presets.py` — curated single-shot jailbreak templates.
 - `wallbreaker/tui/` — the Textual terminal UI (theme in `theme.py`, chrome in
   `header.py`/`sidebar.py`/`widgets.py`, layout in `app.tcss`).
-- `wallbreaker/capabilities.py` — typed capability manifest shared by the TUI and WebUI V2.
+- `wallbreaker/capabilities.py` — typed capability manifest shared by the TUI and WebUI.
 - `wallbreaker/executions.py` — server-owned execution lifecycle and resumable events.
 - `wallbreaker/history_index.py` — rebuildable SQLite index over canonical JSONL history.
-- `wallbreaker/dashboard/` — FastAPI backend + React/Vite dashboards; V2 lives under
-  `web/src/v2/`, while the original interface remains available during rollout.
+- `wallbreaker/dashboard/` — FastAPI backend + React/Vite dashboard; the active application
+  lives under `web/src/dashboard/`.
 
 ## House rules
 

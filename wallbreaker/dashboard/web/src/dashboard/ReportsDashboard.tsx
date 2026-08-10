@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { v2Api } from "./api";
+import { api } from "../api";
 import { EmptyState, LoadingState, Panel, VerdictBadge } from "./components";
 import type { HistoryEvent } from "./types";
 
@@ -54,7 +54,7 @@ export function ReportsDashboard() {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    v2Api.historyRuns(1000).then((payload) => setRuns(payload.items.map((row) => ({
+    api.historyRuns(1000).then((payload) => setRuns(payload.items.map((row) => ({
       run_name: String(row.run_name || ""),
       first_timestamp: String(row.first_timestamp || ""),
       last_timestamp: String(row.last_timestamp || ""),
@@ -66,8 +66,8 @@ export function ReportsDashboard() {
     if (scope === "all") { setReport(null); setEvents([]); return; }
     setLoadingReport(true); setError("");
     Promise.all([
-      v2Api.report(scope),
-      v2Api.historyEvents({ run_name: scope, limit: 5000, order: "asc" }),
+      api.report(scope),
+      api.historyEvents({ run_name: scope, limit: 5000, order: "asc" }),
     ]).then(([reportPayload, eventPayload]) => {
       setReport(reportPayload as unknown as RunReport);
       setEvents(eventPayload.items);
@@ -105,15 +105,15 @@ export function ReportsDashboard() {
     : { scope, generated_at: new Date().toISOString(), report, events: events.map(eventRecord) };
 
   if (!runs) return <LoadingState label="Building report inventory" />;
-  return <div className="v2-page v2-reports-dashboard">
-    <section className="v2-report-scope"><div><strong>Evidence report</strong><span>Analyze outcomes, compare runs, inspect techniques, and export an operator-ready record.</span></div><label className="v2-field"><span>Report scope</span><select value={scope} onChange={(event) => setScope(event.target.value)}><option value="all">All indexed runs</option>{runs.map((run) => <option key={run.run_name} value={run.run_name}>{run.run_name}</option>)}</select></label><div><button type="button" className="v2-button" onClick={() => saveFile(`wallbreaker-${scope}-report.md`, markdown, "text/markdown")}>Download Markdown</button><button type="button" className="v2-button v2-button-primary" onClick={() => saveFile(`wallbreaker-${scope}-evidence.json`, JSON.stringify(exportPayload, null, 2), "application/json")}>Export evidence</button></div></section>
-    {error && <p className="v2-error" role="alert">{error}</p>}
-    <div className="v2-metric-grid v2-report-metrics"><article><span>{scope === "all" ? "Runs" : "Events"}</span><strong>{scope === "all" ? selectedRuns.length : totalEvents}</strong><small>{scope === "all" ? "indexed engagements" : "canonical log records"}</small></article><article><span>Graded responses</span><strong>{totalGraded}</strong><small>judge verdicts recorded</small></article><article><span>Strict bypasses</span><strong>{totalHits}</strong><small>complied or successful</small></article><article><span>Attack success rate</span><strong>{pct(overallAsr)}</strong><small>{report?.scorecard?.overall_grade ? `grade ${String(report.scorecard.overall_grade)}` : "strict aggregate"}</small></article></div>
-    {loadingReport ? <LoadingState label="Generating selected run report" /> : <div className="v2-report-grid">
-      <Panel title="ASR by run" meta={`${trend.length} recent engagements`}><div className="v2-asr-chart">{trend.map((run) => <div key={run.run_name} title={`${run.run_name}: ${pct(run.asr)} (${run.hits}/${run.graded})`}><span style={{ height: `${Math.max(2, run.asr * 100)}%` }} className={run.asr >= .5 ? "high" : run.asr > 0 ? "medium" : "zero"} /><small>{run.run_name.replace(/^run-/, "").slice(0, 8)}</small></div>)}</div></Panel>
-      <Panel title="Verdict distribution" meta={`${totalGraded} graded`}><div className="v2-verdict-bars">{Object.entries(verdictCounts).sort((a, b) => b[1] - a[1]).map(([label, count]) => <article key={label}><header><VerdictBadge verdict={label} /><strong>{count}</strong></header><div><span style={{ width: `${totalGraded ? count / totalGraded * 100 : 0}%` }} /></div><small>{totalGraded ? Math.round(count / totalGraded * 100) : 0}% of graded responses</small></article>)}{!Object.keys(verdictCounts).length && <EmptyState title="No verdicts recorded" />}</div></Panel>
-      <Panel title="Technique performance" meta={scope === "all" ? "Select one run for exact attribution" : `${techniques.length} observed`}><div className="v2-technique-table">{scope === "all" && <EmptyState title="Choose an individual run" detail="Technique attribution is calculated from that run’s exact event stream." />}{scope !== "all" && techniques.map((item) => <article key={item.name}><strong>{item.name}</strong><span>{item.hits} / {item.total}</span><div><i style={{ width: `${item.asr * 100}%` }} /></div><b>{pct(item.asr)}</b></article>)}{scope !== "all" && !techniques.length && <EmptyState title="No technique verdicts found" detail="The run is still reportable, but its legacy records do not correlate verdicts to techniques." />}</div></Panel>
-      <Panel title="Generated report" meta={scope === "all" ? "Portfolio summary" : `${report?.findings?.length || 0} extracted findings`}><pre className="v2-report-preview">{markdown}</pre></Panel>
+  return <div className="dashboard-page dashboard-reports-dashboard">
+    <section className="dashboard-report-scope"><div><strong>Evidence report</strong><span>Analyze outcomes, compare runs, inspect techniques, and export an operator-ready record.</span></div><label className="dashboard-field"><span>Report scope</span><select value={scope} onChange={(event) => setScope(event.target.value)}><option value="all">All indexed runs</option>{runs.map((run) => <option key={run.run_name} value={run.run_name}>{run.run_name}</option>)}</select></label><div><button type="button" className="dashboard-button" onClick={() => saveFile(`wallbreaker-${scope}-report.md`, markdown, "text/markdown")}>Download Markdown</button><button type="button" className="dashboard-button dashboard-button-primary" onClick={() => saveFile(`wallbreaker-${scope}-evidence.json`, JSON.stringify(exportPayload, null, 2), "application/json")}>Export evidence</button></div></section>
+    {error && <p className="dashboard-error" role="alert">{error}</p>}
+    <div className="dashboard-metric-grid dashboard-report-metrics"><article><span>{scope === "all" ? "Runs" : "Events"}</span><strong>{scope === "all" ? selectedRuns.length : totalEvents}</strong><small>{scope === "all" ? "indexed engagements" : "canonical log records"}</small></article><article><span>Graded responses</span><strong>{totalGraded}</strong><small>judge verdicts recorded</small></article><article><span>Strict bypasses</span><strong>{totalHits}</strong><small>complied or successful</small></article><article><span>Attack success rate</span><strong>{pct(overallAsr)}</strong><small>{report?.scorecard?.overall_grade ? `grade ${String(report.scorecard.overall_grade)}` : "strict aggregate"}</small></article></div>
+    {loadingReport ? <LoadingState label="Generating selected run report" /> : <div className="dashboard-report-grid">
+      <Panel title="ASR by run" meta={`${trend.length} recent engagements`}><div className="dashboard-asr-chart">{trend.map((run) => <div key={run.run_name} title={`${run.run_name}: ${pct(run.asr)} (${run.hits}/${run.graded})`}><span style={{ height: `${Math.max(2, run.asr * 100)}%` }} className={run.asr >= .5 ? "high" : run.asr > 0 ? "medium" : "zero"} /><small>{run.run_name.replace(/^run-/, "").slice(0, 8)}</small></div>)}</div></Panel>
+      <Panel title="Verdict distribution" meta={`${totalGraded} graded`}><div className="dashboard-verdict-bars">{Object.entries(verdictCounts).sort((a, b) => b[1] - a[1]).map(([label, count]) => <article key={label}><header><VerdictBadge verdict={label} /><strong>{count}</strong></header><div><span style={{ width: `${totalGraded ? count / totalGraded * 100 : 0}%` }} /></div><small>{totalGraded ? Math.round(count / totalGraded * 100) : 0}% of graded responses</small></article>)}{!Object.keys(verdictCounts).length && <EmptyState title="No verdicts recorded" />}</div></Panel>
+      <Panel title="Technique performance" meta={scope === "all" ? "Select one run for exact attribution" : `${techniques.length} observed`}><div className="dashboard-technique-table">{scope === "all" && <EmptyState title="Choose an individual run" detail="Technique attribution is calculated from that run’s exact event stream." />}{scope !== "all" && techniques.map((item) => <article key={item.name}><strong>{item.name}</strong><span>{item.hits} / {item.total}</span><div><i style={{ width: `${item.asr * 100}%` }} /></div><b>{pct(item.asr)}</b></article>)}{scope !== "all" && !techniques.length && <EmptyState title="No technique verdicts found" detail="The run is still reportable, but its legacy records do not correlate verdicts to techniques." />}</div></Panel>
+      <Panel title="Generated report" meta={scope === "all" ? "Portfolio summary" : `${report?.findings?.length || 0} extracted findings`}><pre className="dashboard-report-preview">{markdown}</pre></Panel>
     </div>}
   </div>;
 }
