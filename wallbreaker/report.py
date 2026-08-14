@@ -251,6 +251,86 @@ def build_findings_export(log_path: str | Path) -> dict:
     }
 
 
+def build_odin_campaign_export(directory: str | Path, campaign_id: str) -> dict:
+    """Build linked 0DIN evidence from the sequential behavior runs."""
+    from .odin import DEFAULT_BEHAVIORS, is_odin_profile
+
+    root = Path(directory)
+    runs = []
+    for path in sorted(root.glob("run-*.jsonl")) if root.is_dir() else []:
+        records = _load_records(path)
+        meta = next((r for r in records if r.get("kind") == "run_meta"), {})
+        agent = meta.get("agent") if isinstance(meta.get("agent"), dict) else {}
+        profile = meta.get("submission_profile") or agent.get("submission_profile")
+        linked = meta.get("odin_campaign_id") or agent.get("odin_campaign_id")
+        if not is_odin_profile(profile) or str(linked or "") != str(campaign_id):
+            continue
+        verdicts = [r for r in records if r.get("kind") == "verdict"]
+        behavior = meta.get("jef_behavior") or agent.get("jef_behavior")
+        category = meta.get("jef_category") or agent.get("jef_category")
+        template = meta.get("odin_template_hash") or agent.get("odin_template_hash")
+        template_text = ""
+        if not template:
+            template_event = next((r for r in records if r.get("kind") == "odin_template"), {})
+            template = template_event.get("template_hash", "")
+            template_text = template_event.get("template", "")
+        else:
+            template_text = next(
+                (r.get("template", "") for r in records if r.get("kind") == "odin_template"),
+                "",
+            )
+        runs.append({
+            "run": path.name,
+            "behavior": behavior or "",
+            "category": category or "",
+            "template_hash": template or "",
+            "template": template_text,
+            "models": meta.get("models", {}),
+            "interface": meta.get("interface", "dashboard"),
+            "jef_evaluations": [
+                item.get("jef_evaluation") for item in verdicts
+                if item.get("jef_evaluation") is not None
+            ],
+            "evidence": [
+                {
+                    "prompt": item.get("payload", ""),
+                    "response": item.get("response", ""),
+                    "model": item.get("target_model", ""),
+                    "interface": item.get("interface", meta.get("interface", "dashboard")),
+                    "technique": item.get("technique", ""),
+                    "label": item.get("label", ""),
+                    "jef_evaluation": item.get("jef_evaluation"),
+                }
+                for item in verdicts
+            ],
+        })
+
+    categories = {str(item["category"]) for item in runs if item.get("category")}
+    behaviors = {str(item["behavior"]) for item in runs if item.get("behavior")}
+    hashes = {str(item["template_hash"]) for item in runs if item.get("template_hash")}
+    errors = []
+    if len(runs) < 2:
+        errors.append("both sequential behavior runs are required")
+    if not set(DEFAULT_BEHAVIORS).issubset(behaviors):
+        errors.append("illicit_substances and harmful_substances evidence are required")
+    if len(categories) < 2:
+        errors.append("two distinct JEF categories are required")
+    if len(hashes) != 1:
+        errors.append("all behavior runs must share one template hash")
+    if any(not run["jef_evaluations"] for run in runs):
+        errors.append("each behavior run must contain JEF evaluation evidence")
+    return {
+        "submission_profile": "0din",
+        "campaign_id": str(campaign_id),
+        "eligible": not errors,
+        "errors": errors,
+        "template_hash": next(iter(hashes), ""),
+        "template": next((run["template"] for run in runs if run.get("template")), ""),
+        "required_behaviors": list(DEFAULT_BEHAVIORS),
+        "runs": runs,
+    }
+
+
 def write_hitlog(findings: list[dict], path: str | Path) -> Path:
     out = Path(path)
     out.parent.mkdir(parents=True, exist_ok=True)

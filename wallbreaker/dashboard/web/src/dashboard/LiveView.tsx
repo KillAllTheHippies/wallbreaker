@@ -482,6 +482,7 @@ function RunLauncher({ execution, onRefresh, onStarted }: { execution: Execution
   const [concurrency, setConcurrency] = useState(4);
   const [requestDelay, setRequestDelay] = useState(0);
   const [jefBehavior, setJefBehavior] = useState("");
+  const [submissionProfile, setSubmissionProfile] = useState("");
   const [techniques, setTechniques] = useState<TechniqueChoice[]>([]);
   const [selected, setSelected] = useState<string[] | null>(() => {
     try { return JSON.parse(localStorage.getItem("wallbreaker:dashboard:techniques") || "null") as string[] | null; }
@@ -509,6 +510,7 @@ function RunLauncher({ execution, onRefresh, onStarted }: { execution: Execution
         objective: objective.trim(), max_rounds: maxRounds, max_tokens: maxTokens,
         concurrency, request_delay_ms: requestDelay,
         ...(jefBehavior ? { jef_behavior: jefBehavior } : {}),
+        ...(submissionProfile ? { submission_profile: submissionProfile } : {}),
         ...(selected == null ? {} : { enabled_techniques: selected }),
       }, "interactive");
       onStarted(created);
@@ -523,6 +525,7 @@ function RunLauncher({ execution, onRefresh, onStarted }: { execution: Execution
     <div className="dashboard-agent-launch-body">
       <div className="dashboard-agent-launch-primary">
         <label className="dashboard-field dashboard-agent-objective"><span>Objective</span><textarea value={objective} onChange={(event) => setObjective(event.target.value)} placeholder="Describe the authorized evaluation objective" /></label>
+        <label className="dashboard-checkbox-field dashboard-field-wide"><input type="checkbox" checked={submissionProfile === "0din"} onChange={(event) => setSubmissionProfile(event.target.checked ? "0din" : "")} disabled={Boolean(active)} /><span>0DIN submission mode (two-category eligible evidence)</span></label>
         <JEFBehaviorPicker value={jefBehavior} onChange={setJefBehavior} disabled={Boolean(active)} />
         <button type="button" className="dashboard-button dashboard-button-primary" disabled={working || !objective.trim() || Boolean(active)} onClick={start}>{working ? "Starting" : "Start loop"}</button>
       </div>

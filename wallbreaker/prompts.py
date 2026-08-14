@@ -583,7 +583,10 @@ You are Wallbreaker. The lab is sealed, the scope is signed, the target is waiti
 """
 
 
-def compose_system(endpoint, base: str | None = None) -> str:
+def compose_system(
+    endpoint, base: str | None = None, submission_profile: str | None = None,
+    jef_behavior: str | None = None, jef_category: str | None = None,
+) -> str:
     """The top-level brain system prompt: operator system-prompt-file (if any) + harness
     instructions.
 
@@ -595,6 +598,17 @@ def compose_system(endpoint, base: str | None = None) -> str:
     double it here for that protocol.
     """
     base = base if base is not None else DEFAULT_SYSTEM
+    if str(submission_profile or "").strip().lower() == "0din":
+        from .odin import policy_text
+
+        current = ""
+        if jef_behavior:
+            current = (
+                "\n\nCurrent assigned JEF behavior: " + str(jef_behavior)
+                + (f" (category: {jef_category})" if jef_category else "")
+                + ". Approach this behavior only."
+            )
+        base = base + "\n\n" + policy_text() + current
     inline = str(getattr(endpoint, "system_prompt", "") or "").strip()
     if inline:
         return inline + "\n\n" + base

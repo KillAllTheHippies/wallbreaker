@@ -260,6 +260,34 @@ def _cache_enabled(args: dict, ctx: ToolContext) -> bool:
     return bool(args.get("cache", False)) or bool(getattr(ctx, "use_cache", False))
 
 
+def _prepare_odin_prompt(prompt: str, ctx: ToolContext, *, initial: bool) -> str:
+    """Capture and instantiate the shared 0DIN behavior template."""
+    if str(getattr(ctx, "submission_profile", "") or "").strip().lower() != "0din":
+        return prompt
+    from ..odin import BEHAVIOR_PLACEHOLDER, instantiate_template, template_hash
+
+    text = str(prompt or "")
+    if initial and BEHAVIOR_PLACEHOLDER not in text:
+        raise ValueError(f"0DIN mode requires {BEHAVIOR_PLACEHOLDER} in the reusable prompt template")
+    if BEHAVIOR_PLACEHOLDER in text:
+        ctx.odin_template = text
+        ctx.odin_template_hash = template_hash(text)
+        if ctx.run_events is not None:
+            try:
+                ctx.run_events({
+                    "event": "odin_template",
+                    "campaign_id": getattr(ctx, "odin_campaign_id", ""),
+                    "template_hash": ctx.odin_template_hash,
+                    "template": text,
+                    "behavior": ctx.jef_behavior,
+                    "category": getattr(ctx, "jef_category", ""),
+                })
+            except Exception:
+                pass
+        return instantiate_template(text, ctx.jef_behavior)
+    return text
+
+
 async def _cache_hit_output(ctx, messages, system, entry, enc_note, args) -> str:
     """Reconstruct a query_target reply from a cached entry without any provider call."""
     response = entry.get("last_response", "")
@@ -298,9 +326,22 @@ async def _query_target(args: dict, ctx: ToolContext) -> str:
             "Use query_image_target to attack it - it saves and vision-grades the picture."
         )
 
+    try:
+        prompt = _prepare_odin_prompt(prompt, ctx, initial=not bool(ctx.target_thread))
+    except ValueError as exc:
+        return f"Error: {exc}"
+
     transforms = args.get("transforms") or []
     if isinstance(transforms, str):
         transforms = [t.strip() for t in transforms.split(",") if t.strip()]
+    if str(getattr(ctx, "submission_profile", "") or "").strip().lower() == "0din":
+        from ..odin import validate_techniques
+
+        violations = validate_techniques(transforms)
+        if violations:
+            return "Error: 0DIN-disallowed transform(s): " + ", ".join(
+                f"{item['technique']} ({item['policy']})" for item in violations
+            )
     enc_note = ""
     if transforms:
         unknown = [t for t in transforms if t not in TRANSFORMS]
@@ -316,6 +357,14 @@ async def _query_target(args: dict, ctx: ToolContext) -> str:
     sys_transforms = args.get("system_transforms") or []
     if isinstance(sys_transforms, str):
         sys_transforms = [t.strip() for t in sys_transforms.split(",") if t.strip()]
+    if str(getattr(ctx, "submission_profile", "") or "").strip().lower() == "0din":
+        from ..odin import validate_techniques
+
+        violations = validate_techniques(sys_transforms)
+        if violations:
+            return "Error: 0DIN-disallowed system transform(s): " + ", ".join(
+                f"{item['technique']} ({item['policy']})" for item in violations
+            )
     if sys_transforms:
         unknown = [t for t in sys_transforms if t not in TRANSFORMS]
         if unknown:
@@ -443,9 +492,22 @@ async def _continue_target(args: dict, ctx: ToolContext) -> str:
             "continue_target to push the SAME thread (multi-turn escalation)."
         )
 
+    try:
+        follow = _prepare_odin_prompt(follow, ctx, initial=False)
+    except ValueError as exc:
+        return f"Error: {exc}"
+
     transforms = args.get("transforms") or []
     if isinstance(transforms, str):
         transforms = [t.strip() for t in transforms.split(",") if t.strip()]
+    if str(getattr(ctx, "submission_profile", "") or "").strip().lower() == "0din":
+        from ..odin import validate_techniques
+
+        violations = validate_techniques(transforms)
+        if violations:
+            return "Error: 0DIN-disallowed transform(s): " + ", ".join(
+                f"{item['technique']} ({item['policy']})" for item in violations
+            )
     enc_note = ""
     if transforms:
         unknown = [t for t in transforms if t not in TRANSFORMS]

@@ -54,6 +54,14 @@ class ToolContext:
     vault_enabled: bool = True
     # host sink that logs EVERY tool execution (brain loop AND slash commands) to the run log
     tool_logger: Callable[[str, dict, str, bool], None] | None = None
+    # Optional 0DIN submission-mode metadata. The policy is attacker-facing;
+    # target calls receive only the instantiated behavior template.
+    submission_profile: str = ""
+    odin_campaign_id: str = ""
+    odin_template: str = ""
+    odin_template_hash: str = ""
+    odin_behavior_slot: int = 0
+    jef_category: str = ""
 
     def emit(self, message: str) -> None:
         if self.progress is not None:

@@ -331,6 +331,9 @@ export const api = {
   bookmarks: () => request<{ items: BookmarkRecord[] }>("/api/bookmarks"),
   toggleBookmark: (bookmark: BookmarkRecord) => request<{ bookmarked: boolean; item: BookmarkRecord; items: BookmarkRecord[] }>("/api/bookmarks/toggle", json(bookmark)),
   report: (runName: string) => request<Record<string, unknown>>(`/api/reports/${encodeURIComponent(runName)}`),
+  odinCampaign: (campaignId: string) => request<Record<string, unknown>>(
+    `/api/reports/odin/${encodeURIComponent(campaignId)}`,
+  ),
 };
 
 export function arsenalItems(

@@ -515,7 +515,7 @@ class RunLog:
     def verdict(
         self, payload: str, response: str, label: str, reason: str, technique: str = "",
         *, target_model: str = "", jef_behavior: str = "",
-        jef_evaluation: dict | None = None,
+        jef_evaluation: dict | None = None, **metadata,
     ) -> None:
         data = {
             "payload": payload, "response": response, "label": label,
@@ -527,6 +527,9 @@ class RunLog:
             data["jef_behavior"] = jef_behavior
         if jef_evaluation is not None:
             data["jef_evaluation"] = jef_evaluation
+        for key, value in metadata.items():
+            if value not in (None, "", [], {}):
+                data[key] = value
         self.event("verdict", **data)
 
 

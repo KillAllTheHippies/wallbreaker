@@ -5,6 +5,7 @@ import dataclasses
 import json
 import re
 import time
+import uuid
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -34,10 +35,16 @@ _BOOKMARKS_FILE = ".wallbreaker_bookmarks.json"
 class _LiveAttackerProvider:
     """Hot-swap the attacker while preserving one autonomous conversation."""
 
-    def __init__(self, provider, endpoint, system_builder):
+    def __init__(
+        self, provider, endpoint, system_builder, submission_profile: str = "",
+        jef_behavior: str = "", jef_category: str = "",
+    ):
         self._provider = provider
         self.endpoint = endpoint
         self._system_builder = system_builder
+        self.submission_profile = submission_profile
+        self.jef_behavior = jef_behavior
+        self.jef_category = jef_category
 
     @property
     def model(self) -> str:
@@ -49,7 +56,13 @@ class _LiveAttackerProvider:
 
     async def stream(self, messages, tools=None, system=None, max_tokens=4096, temperature=None):
         provider = self._provider
-        active_system = self._system_builder(self.endpoint)
+        try:
+            active_system = self._system_builder(
+                self.endpoint, submission_profile=self.submission_profile,
+                jef_behavior=self.jef_behavior, jef_category=self.jef_category,
+            )
+        except TypeError:
+            active_system = self._system_builder(self.endpoint)
         async for event in provider.stream(
             messages,
             tools=tools,
@@ -1566,6 +1579,17 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
         if not objective:
             raise HTTPException(status_code=400, detail="'objective' is required")
         from ..jef import JEFUnavailable, objective_for_behavior
+        from ..odin import (
+            is_odin_profile,
+            template_hash,
+            validate_behavior,
+            validate_template,
+            validate_techniques,
+        )
+
+        submission_profile = str(body.get("submission_profile") or "").strip().lower()
+        if submission_profile not in {"", "0din"}:
+            raise HTTPException(status_code=400, detail="submission_profile must be empty or '0din'")
 
         requested_behavior = body.get("jef_behavior")
         try:
@@ -1574,6 +1598,17 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
             raise HTTPException(status_code=503, detail=str(exc)) from exc
         if requested_behavior and jef_behavior is None:
             raise HTTPException(status_code=400, detail=f"unknown JEF behavior: {requested_behavior}")
+        if is_odin_profile(submission_profile):
+            if not requested_behavior:
+                raise HTTPException(status_code=400, detail="0DIN mode requires a JEF behavior")
+            behavior_error = validate_behavior(jef_behavior["id"] if jef_behavior else requested_behavior)
+            if behavior_error:
+                raise HTTPException(status_code=400, detail=behavior_error)
+        odin_template = str(body.get("odin_template") or "")
+        if is_odin_profile(submission_profile) and odin_template:
+            template_errors = validate_template(odin_template)
+            if template_errors:
+                raise HTTPException(status_code=400, detail="; ".join(template_errors))
         cumulative_jef = bool(body.get("cumulative_jef", True))
         jef_post_pass_mode = str(body.get("jef_post_pass_mode") or "stop_on_threshold").strip().lower()
         if jef_post_pass_mode not in {"stop_on_threshold", "strengthen"}:
@@ -1616,14 +1651,37 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
         enabled_techniques = [
             name for name in registry.names() if name not in _AGENT_CONTROL_TOOLS
         ]
+        if is_odin_profile(submission_profile):
+            violations = validate_techniques(enabled_techniques)
+            if violations:
+                labels = ", ".join(
+                    f"{item['technique']} ({item['policy']})" for item in violations
+                )
+                raise HTTPException(status_code=400, detail=f"0DIN-disallowed techniques enabled: {labels}")
+        odin_campaign_id = str(body.get("odin_campaign_id") or "").strip()
+        if is_odin_profile(submission_profile) and not odin_campaign_id:
+            odin_campaign_id = str(uuid.uuid4())
+        odin_template_hash = template_hash(odin_template) if odin_template else ""
+        odin_behavior_slot = _int_setting(body.get("odin_behavior_slot"), 0, 0, 2)
         resume_event = asyncio.Event()
         resume_event.set()
-        provider = _LiveAttackerProvider(base_provider, brain, compose_system)
+        provider = _LiveAttackerProvider(
+            base_provider, brain, compose_system, submission_profile=submission_profile,
+            jef_behavior=jef_behavior["id"] if jef_behavior else "",
+            jef_category=jef_behavior.get("category", "") if jef_behavior else "",
+        )
         runlog = RunLog(directory=str(sessions))
         runlog.set_run_meta(
             source="dashboard_agent",
             models=run_models_meta(run_config, attacker=brain),
             agent_roles=role_meta,
+            interface=str(body.get("interface") or "dashboard"),
+            submission_profile=submission_profile,
+            odin_campaign_id=odin_campaign_id,
+            odin_template_hash=odin_template_hash,
+            odin_behavior_slot=odin_behavior_slot,
+            jef_behavior=jef_behavior["id"] if jef_behavior else "",
+            jef_category=jef_behavior.get("category", "") if jef_behavior else "",
             agent={
                 "max_rounds": max_rounds,
                 "max_tokens": max_tokens,
@@ -1634,6 +1692,11 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
                 "cumulative_jef": cumulative_jef,
                 "jef_post_pass_mode": jef_post_pass_mode,
                 "continuation_of": continuation_of,
+                "submission_profile": submission_profile,
+                "odin_campaign_id": odin_campaign_id,
+                "odin_template_hash": odin_template_hash,
+                "odin_behavior_slot": odin_behavior_slot,
+                "jef_category": jef_behavior.get("category", "") if jef_behavior else "",
             },
         )
         queue: asyncio.Queue = asyncio.Queue()
@@ -1697,6 +1760,12 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
         registry.ctx.jef_behavior = jef_behavior["id"] if jef_behavior else ""
         registry.ctx.jef_cumulative = cumulative_jef
         registry.ctx.jef_post_pass_mode = jef_post_pass_mode
+        registry.ctx.submission_profile = submission_profile
+        registry.ctx.odin_campaign_id = odin_campaign_id
+        registry.ctx.odin_template = odin_template
+        registry.ctx.odin_template_hash = odin_template_hash
+        registry.ctx.odin_behavior_slot = odin_behavior_slot
+        registry.ctx.jef_category = jef_behavior.get("category", "") if jef_behavior else ""
         registry.ctx.current_objective = objective
         def record_verdict(payload, response, label, reason, technique) -> None:
             evaluations = registry.ctx.jef_evaluations
@@ -1706,6 +1775,13 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
                 target_model=getattr(run_config.target, "model", "") if run_config.target else "",
                 jef_behavior=registry.ctx.jef_behavior,
                 jef_evaluation=evaluation,
+                submission_profile=registry.ctx.submission_profile,
+                odin_campaign_id=registry.ctx.odin_campaign_id,
+                odin_template_hash=registry.ctx.odin_template_hash,
+                odin_behavior_slot=registry.ctx.odin_behavior_slot,
+                jef_category=(
+                    jef_behavior.get("category", "") if jef_behavior else ""
+                ),
             )
 
         registry.ctx.record = record_verdict
@@ -1722,6 +1798,11 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
         )
 
         history = list(history_seed) if history_seed else [user(objective)]
+        if odin_template:
+            history.append(user(
+                "[0DIN reusable prompt template — preserve this exact template and "
+                "the " + "__JEF_BEHAVIOR__" + " token]\n" + odin_template
+            ))
         if continuation_of:
             history.append(user(
                 "[Operator continuation]\n"
@@ -1779,7 +1860,8 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
                 try:
                     with inference_logging(runlog):
                         res = await run_autonomous(
-                            provider, registry, history, system=compose_system(brain),
+                            provider, registry, history,
+                            system=compose_system(brain, submission_profile=submission_profile),
                             events=events, max_rounds=max_rounds, max_tokens=max_tokens,
                             feedback=drain_feedback,
                             before_model=pause_checkpoint,
@@ -1820,6 +1902,10 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
             nonlocal stream_attached
             push({"type": "start", "objective": objective,
                   "jef_behavior": jef_behavior["id"] if jef_behavior else "",
+                  "submission_profile": submission_profile,
+                  "odin_campaign_id": odin_campaign_id,
+                  "odin_template_hash": registry.ctx.odin_template_hash,
+                  "jef_category": jef_behavior.get("category", "") if jef_behavior else "",
                   "brain": getattr(brain, "model", ""),
                   "provider": role_meta.get("attacker", {}).get("provider", ""),
                   "target": getattr(run_config.target, "model", ""),
@@ -1846,6 +1932,64 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
     @app.post("/api/agent/run")
     async def agent_run(body: dict):
         return await _agent_run(body)
+
+    @app.post("/api/agent/odin-campaign")
+    async def odin_campaign_run(body: dict):
+        from fastapi.responses import StreamingResponse
+
+        campaign_id = str(body.get("odin_campaign_id") or uuid.uuid4()).strip()
+        requested_template = str(body.get("odin_template") or "")
+
+        async def gen():
+            template = requested_template
+            for slot, behavior in enumerate(("illicit_substances", "harmful_substances"), 1):
+                run_body = dict(body)
+                run_body.update({
+                    "submission_profile": "0din",
+                    "jef_behavior": behavior,
+                    "odin_campaign_id": campaign_id,
+                    "odin_behavior_slot": slot,
+                })
+                if template:
+                    run_body["odin_template"] = template
+                response = await _agent_run(run_body)
+                buffer = ""
+                async for chunk in response.body_iterator:
+                    text = chunk.decode() if isinstance(chunk, bytes) else str(chunk)
+                    yield text
+                    buffer += text
+                    while "\n\n" in buffer:
+                        frame, buffer = buffer.split("\n\n", 1)
+                        if not frame.startswith("data:"):
+                            continue
+                        try:
+                            event = json.loads(frame[5:].strip())
+                        except json.JSONDecodeError:
+                            continue
+                        if event.get("type") == "done":
+                            run_log = event.get("run_log")
+                            if not template and run_log:
+                                records = report_mod._load_records(sessions / str(run_log))
+                                template = next(
+                                    (
+                                        row.get("template", "")
+                                        for row in records
+                                        if row.get("kind") == "odin_template"
+                                    ),
+                                    "",
+                                )
+                if not template:
+                    yield "data: " + json.dumps({
+                        "type": "campaign_error",
+                        "campaign_id": campaign_id,
+                        "error": "the first behavior run did not produce an __JEF_BEHAVIOR__ template",
+                    }) + "\n\n"
+                    return
+
+        return StreamingResponse(
+            gen(), media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        )
 
     def _execution_or_404(execution_id: str):
         execution = execution_manager.get(execution_id)
@@ -2033,11 +2177,14 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
         history_seed: list | None = None,
         continuation_of: str = "",
     ):
-        response = await _agent_run(
-            args,
-            history_seed=history_seed,
-            continuation_of=continuation_of,
-        )
+        if str(args.get("submission_profile") or "").strip().lower() == "0din":
+            response = await odin_campaign_run(args)
+        else:
+            response = await _agent_run(
+                args,
+                history_seed=history_seed,
+                continuation_of=continuation_of,
+            )
         if agent_control is not None:
             agent_control["execution_id"] = ctx.execution.id
         buffer = ""
@@ -2442,6 +2589,15 @@ def create_app(config=None, sessions_dir: str | Path = "sessions", web_dir: str 
             "export": report_mod.build_findings_export(path),
             "markdown": report_mod.build_report(path),
         }
+
+    @app.get("/api/reports/odin/{campaign_id}")
+    async def odin_campaign_report(campaign_id: str):
+        from urllib.parse import unquote
+
+        campaign = report_mod.build_odin_campaign_export(sessions, unquote(campaign_id))
+        if not campaign["runs"]:
+            raise HTTPException(status_code=404, detail=f"unknown 0DIN campaign '{campaign_id}'")
+        return campaign
 
     @app.api_route(
         "/api/{unknown_path:path}",
